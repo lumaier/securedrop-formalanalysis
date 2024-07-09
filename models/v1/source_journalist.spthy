@@ -1,0 +1,69 @@
+theory SourceJournalistMessaging
+begin
+
+builtins: symmetric-encryption, diffie-hellman, signing
+
+rule Register_pk:
+  let public_component = 'g'^~ltk in
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk($A, ~ltk), !Pk($A, public_component), Out(public_component)]
+
+rule Reveal_ltk:
+  [ !Ltk(A, ltk) ]
+  --[ Reveal(A) ]->
+  [ Out(ltk) ]
+
+rule Journalist_Init:
+  let je_pk = 'g'^~je_sk
+      sig_je_pk = sign(je_pk, j_sk)
+  in
+  [ !Ltk($J, j_sk)
+  , Fr(~je_sk)
+  ]
+  --[ ReachJournalistInit($J)
+    , Neq(j_sk, ~je_sk) ]->
+  [ Out(<je_pk, sig_je_pk>)
+  , Journalist_Init($J, ~je_sk)
+  ]
+
+rule Source_Submit:
+  let k = je_pk^~me_sk
+      c = senc(<~msg, s_pk>, k)
+      me_pk = 'g'^~me_sk
+  in
+  [ !Pk($J, j_pk)
+  , !Pk($S, s_pk)
+  , In(<je_pk, sig_je_pk>)
+  , Fr(~msg)
+  , Fr(~me_sk) ]
+  --[ Eq(verify(sig_je_pk, je_pk, j_pk), true)
+    , Source_Submission($S, ~msg)
+    ]->
+  [ Out(<c,me_pk>)]
+
+rule Journalist_Recv:
+  let k = me_pk^je_sk 
+      msg = sdec(c, k)    
+  in
+  [ In(<c,me_pk>)
+  , Journalist_Init($J, je_sk) ]
+  --[ Journalist_Read($J, msg) ]->
+  []
+
+restriction Eq:
+  "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
+
+restriction Neq:
+  "All t1 t2 #x. Neq(t1, t2) @ #x ==> not (t1 = t2)"
+
+lemma Executability:
+  exists-trace
+  "Ex #t1 #t2 #t3 s j m. ReachJournalistInit(j) @ #t1 & Source_Submission(s, m) @ #t2 & Journalist_Read(j, m) @ #t3"
+
+lemma Confidentiality:
+  all-traces
+  "All #t1 #t2 s j m. Source_Submission(s, m) @ #t1 & Journalist_Read(j, m) @ #t2
+    ==> (not Ex #x. K(m) @ #x) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
+
+end
