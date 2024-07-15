@@ -1,4 +1,4 @@
-N_THREADS=48
+N_THREADS=10
 PORT=1611 # used port for port-forwarding the GUI
 DIR="v1/"
 USER:=$(shell whoami)
