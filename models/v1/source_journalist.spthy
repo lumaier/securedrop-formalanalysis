@@ -3,13 +3,24 @@ begin
 
 builtins: symmetric-encryption, diffie-hellman, signing
 
-rule Register_pk:
+rule Register_journalist_pk:
   [ Fr(~ltk) ]
   -->
-  [ !Ltk($A, ~ltk), !Pk($A, pk(~ltk)), Out(pk(~ltk))]
+  [ !Ltk_journalist($A, ~ltk), !Pk_journalist($A, pk(~ltk)), Out(pk(~ltk))]
 
-rule Reveal_ltk:
-  [ !Ltk(A, ltk) ]
+rule Reveal_journalist_ltk:
+  [ !Ltk_journalist(A, ltk) ]
+  --[ Reveal(A), SomeCompromise() ]->
+  [ Out(ltk) ]
+
+rule Register_source_pk:
+  let public_component = 'g'^~ltk in
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk_source($A, ~ltk), !Pk_source($A, public_component), Out(public_component)]
+
+rule Reveal_source_ltk:
+  [ !Ltk_source(A, ltk) ]
   --[ Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
@@ -17,36 +28,37 @@ rule Journalist_Init:
   let je_pk = 'g'^~je_sk
       sig_je_pk = sign(je_pk, j_sk)
   in
-  [ !Ltk($J, j_sk)
+  [ !Ltk_journalist($J, j_sk)
   , Fr(~je_sk)
   ]
   --[ ReachJournalistInit($J) ]->
   [ Out(<je_pk, sig_je_pk>)
-  , Journalist_Init($J, ~je_sk)
+  , Journalist_Ephemeral_Key($J, ~je_sk)
   ]
 
 rule Source_Submit:
   let k = je_pk^~me_sk
-      c = senc(<~msg, s_pk>, k)
+      c = senc(<~m, s_pk>, k)
       me_pk = 'g'^~me_sk
   in
-  [ !Pk($J, j_pk)
-  , !Pk($S, s_pk)
+  [ !Pk_journalist($J, j_pk)
+  , !Pk_source($S, s_pk)
   , In(<je_pk, sig_je_pk>)
-  , Fr(~msg)
+  , Fr(~m)
   , Fr(~me_sk) ]
   --[ Eq(verify(sig_je_pk, je_pk, j_pk), true)
-    , Source_Submission($S, $J, ~msg)
+    , Source_Submission($S, $J, ~m)
     ]->
   [ Out(<c,me_pk>) ]
 
 rule Journalist_Recv:
   let k = me_pk^je_sk 
-      msg = fst(sdec(c, k))
+      msg = sdec(c, k)
+      m = fst(msg)
   in
   [ In(<c,me_pk>)
-  , Journalist_Init($J, je_sk) ]
-  --[ Journalist_Read($J, msg) ]->
+  , Journalist_Ephemeral_Key($J, je_sk) ]
+  --[ Journalist_Read($J, m) ]->
   []
 
 restriction Eq:
