@@ -3,13 +3,13 @@ begin
 
 builtins: symmetric-encryption, diffie-hellman, signing
 
-rule Register_signing_pk:
+rule Register_pk:
   [ Fr(~ltk) ]
   -->
-  [ !Ltk_signing($A, ~ltk), !Pk_signing($A, pk(~ltk)), Out(pk(~ltk))]
+  [ !Ltk($A, ~ltk), !Pk($A, pk(~ltk)), Out(pk(~ltk))]
 
-rule Reveal_signing_ltk:
-  [ !Ltk_signing(A, ltk) ]
+rule Reveal_pk:
+  [ !Ltk(A, ltk) ]
   --[ Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
@@ -29,7 +29,7 @@ rule Journalist_Init:
       sig_je_pk = sign(je_pk, j_sk)
       sig_jc_pk = sign(jc_pk, j_sk)
   in
-  [ !Ltk_signing($J, j_sk)
+  [ !Ltk($J, j_sk)
     , !Pk_dh($J, jc_pk)
     , Fr(~je_sk)
   ]
@@ -44,7 +44,7 @@ rule Source_Submit:
       me_pk = 'g'^~me_sk
       m_gdh = jc_pk^~me_sk
   in
-  [ !Pk_signing($J, j_pk)
+  [ !Pk($J, j_pk)
   , !Pk_dh($S, s_pk)
   , In(<je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
   , Fr(~m)
