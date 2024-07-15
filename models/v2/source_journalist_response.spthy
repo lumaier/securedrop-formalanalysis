@@ -112,4 +112,9 @@ lemma Confidentiality_Journalist_Response:
   "All #t1 #t2 s j m_old m. Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
     ==> (not Ex #x. K(m) @ #x) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
 
+lemma Confidentiality:
+  all-traces
+  "All #t1 #t2 s j m_old m. Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
+    ==> ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
+
 end
