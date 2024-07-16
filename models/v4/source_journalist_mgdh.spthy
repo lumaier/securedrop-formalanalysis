@@ -42,6 +42,7 @@ rule Source_Submit:
   let k = je_pk^~me_sk
       c = senc(<~m, s_pk>, k)
       me_pk = 'g'^~me_sk
+      m_gdh = je_pk^~me_sk 
   in
   [ !Pk($J, j_pk)
   , !Pk_dh($S, s_pk)
@@ -52,7 +53,7 @@ rule Source_Submit:
     , Eq(verify(sig_jc_pk, jc_pk, j_pk), true)
     , Source_Submission($S, $J, ~m)
     ]->
-  [ Out(<c,me_pk>) ]
+  [ Out(<c, m_gdh, me_pk>) ]
 
 rule Journalist_Recv:
   let k = me_pk^je_sk 
