@@ -53,7 +53,8 @@ rule Source_Submit:
     , Eq(verify(sig_jc_pk, jc_pk, j_pk), true)
     , Source_Submission($S, $J, ~m)
     ]->
-  [ Out(<c, m_gdh, me_pk>) ]
+  [ Out(<c, me_pk>)
+  , Out(m_gdh) ]
 
 rule Journalist_Recv:
   let k = me_pk^je_sk 
