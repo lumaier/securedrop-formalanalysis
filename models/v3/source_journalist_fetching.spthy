@@ -58,7 +58,8 @@ rule Source_Submit:
     , Neq(je_pk, jc_pk)
     , Source_Submission($S, $J, ~m)
     ]->
-  [ Out(<c, m_gdh, me_pk>) ]
+  [ Out(<c, m_gdh, me_pk>)
+  , Source_Submit($S, $J) ]
 
 rule Journalist_Fetch:
   let kmid = pmgdh^jc_sk 
@@ -75,38 +76,38 @@ rule Journalist_Recv:
   let k = me_pk^je_sk 
       msg = sdec(c, k)
       m = fst(msg)
+      s_pk = snd(msg)
   in
   [ In(<c,me_pk>)
   , Journalist_Ephemeral_Key($J, je_sk)
   , Journalist_Fetch($J, m_id) ]
   --[ Journalist_Read($J, m) ]->
+  [ Journalist_Recv($J, m, s_pk) ]
+
+rule Journalist_Reply:
+  let k = s_pk^~me_sk
+      je_pk = 'g'^~je_sk
+      c = senc(<~m, je_pk>, k)
+      me_pk = 'g'^~me_sk
+  in
+  [ Journalist_Recv($J, m_old, s_pk)
+  , Fr(~m)
+  , Fr(~me_sk)
+  , Fr(~je_sk) ]
+  --[ Journalist_Response($J, m_old, ~m) ]->
+  [ Out(<c, me_pk>) ]
+
+rule Source_Recv:
+  let k = me_pk^s_sk
+      msg = sdec(c, k)
+      m = fst(msg)
+      je_pk = snd(msg)
+  in
+  [ In(<c, me_pk>)
+  , Source_Submit($S, $J)
+  , !Ltk_dh($S, s_sk) ]
+  --[ Source_Read($S, m) ]->
   []
-
-// rule Journalist_Reply:
-//   let k = s_pk^~me_sk
-//       je_pk = 'g'^~je_sk
-//       c = senc(<~m, je_pk>, k)
-//       me_pk = 'g'^~me_sk
-//   in
-//   [ Journalist_Recv($J, m_old, s_pk)
-//   , Fr(~m)
-//   , Fr(~me_sk)
-//   , Fr(~je_sk) ]
-//   --[ Journalist_Response($J, m_old, ~m)
-//     ]->
-//   [ Out(<c, me_pk>) ]
-
-// rule Source_Recv:
-//   let k = me_pk^s_sk
-//       msg = sdec(c, k)
-//       m = fst(msg)
-//       je_pk = snd(msg)
-//   in
-//   [ In(<c, me_pk>)
-//   , Source_Submit($S)
-//   , !Ltk_dh($S, s_sk) ]
-//   --[ Source_Read($S, m) ]->
-//   []
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
@@ -121,21 +122,31 @@ lemma encryption [sources]:
     ==>
     (Ex #x. K(m_id) @ #x & #x < #t) & (Ex #x. K(key) @ #x & #x < #t)"
 
-lemma Executability:
+lemma Executability_Submission:
   exists-trace
   "Ex #t1 #t2 s j m.
       Source_Submission(s, j, m) @ #t1
     & Journalist_Read(j, m) @ #t2
     & (not Ex #x. SomeCompromise() @ #x)"
 
-lemma Confidentiality:
+lemma Executability_Response:
+  exists-trace
+  "Ex #t1 #t2 #t3 s j m_old m.
+      Source_Submission(s, j, m_old) @ #t1
+    & Journalist_Response(j, m_old, m) @ #t2
+    & Source_Read(s, m) @ #t3
+    & (not Ex #x. SomeCompromise() @ #x)"
+
+lemma Confidentiality_Submission:
   all-traces
   "All #t1 s j m. Source_Submission(s, j, m) @ #t1
     ==> (not Ex #x. K(m) @ #x) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
 
-// lemma Confidentiality_Journalist_Response:
-//   all-traces
-//   "All #t1 #t2 s j m_old m. Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
-//     ==> (not Ex #x. K(m) @ #x) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
+lemma Confidentiality_Response:
+  all-traces
+  "All #t1 #t2 s j m_old m. 
+    Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
+    ==> 
+    ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
 
 end
