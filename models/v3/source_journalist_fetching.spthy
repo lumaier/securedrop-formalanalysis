@@ -64,17 +64,19 @@ rule Source_Submit:
   , Source_Submit($S, $J)
   , !Source_Keys(s_pk, sc_pk, k) ]
 
-// rule Journalist_Fetch:
-//   let kmid = pmgdh^jc_sk 
-//       m_id = sdec(enc_m_id, kmid)
-//   in
-//   [ In(<pmgdh, enc_m_id>)
-//   , !Ltk_dh($J, jc_sk) ]
-//   --[ Symmetric_Encryption_Adversary(m_id, kmid)
-//     , Neq(pmgdh, DH_neutral)
-//     , Neq(pmgdh, 'g') ]->
-//   [ Out(m_id)
-//   , Journalist_Fetch($J, m_id) ]
+rule Journalist_Fetch:
+  let kmid = pmgdh^jc_sk 
+      m_id = sdec(enc_m_id, kmid)
+  in
+  [ In(<pmgdh, enc_m_id>)
+  , !Ltk_dh($J, jc_sk) ]
+  // this action ensures that the adversary needs to know m_id and kmid to generate enc_m_id
+  // -> prevents partial deconstructions
+  --[ Symmetric_Encryption_Adversary(m_id, kmid)
+    , Neq(pmgdh, DH_neutral)
+    , Neq(pmgdh, 'g') ]->
+  [ Out(m_id)
+  , Journalist_Fetch($J, m_id) ]
 
 rule Journalist_Recv:
   let k = me_pk^je_sk
@@ -82,7 +84,7 @@ rule Journalist_Recv:
   [ In(<senc(<m, s_pk, sc_pk>, me_pk^je_sk), me_pk>)
   , Journalist_Ephemeral_Key($J, je_sk)
   , !Source_Keys(s_pk, sc_pk, me_pk^je_sk)
-  // , Journalist_Fetch($J, m_id) 
+  , Journalist_Fetch($J, m_id) 
 ]
   --[ Journalist_Read($J, m) ]->
   [ Journalist_Recv($J, m, s_pk, sc_pk) ]
@@ -101,35 +103,40 @@ rule Journalist_Reply:
   --[ Journalist_Response($J, m_old, ~m) ]->
   [ Out(<c, m_gdh, me_pk>) ]
 
-// rule Source_Fetch:
-//   let kmid = pmgdh^sc_sk 
-//       m_id = sdec(enc_m_id, kmid)
-//   in
-//   [ In(<pmgdh, enc_m_id>)
-//   , !Ltk_dh($S, sc_sk) ]
-//   --[ Symmetric_Encryption_Adversary(m_id, kmid) ]->
-//   [ Out(m_id)
-//   , Source_Fetch($S, m_id) ]
+rule Source_Fetch:
+  let kmid = pmgdh^sc_sk 
+      m_id = sdec(enc_m_id, kmid)
+  in
+  [ In(<pmgdh, enc_m_id>)
+  , !Ltk_dh($S, sc_sk) ]
+  --[ Symmetric_Encryption_Adversary(m_id, kmid) ]->
+  [ Out(m_id)
+  , Source_Fetch($S, m_id) ]
 
-// rule Source_Recv:
-//   let k = me_pk^s_sk
-//       msg = sdec(c, k)
-//       m = fst(msg)
-//       je_pk = snd(msg)
-//   in
-//   [ In(<c, me_pk>)
-//   , Source_Submit($S, $J)
-//   // , Source_Fetch($S, m_id)
-//   , !Ltk_dh($S, s_sk) ]
-//   --[ Source_Read($S, m)
-//     , Symmetric_Encryption_IN(<m, je_pk>, k) ]->
-//   []
+rule Source_Recv:
+  let k = me_pk^s_sk
+      msg = sdec(c, k)
+      m = fst(msg)
+      je_pk = snd(msg)
+  in
+  [ In(<c, me_pk>)
+  , Source_Submit($S, $J)
+  , Source_Fetch($S, m_id)
+  , !Ltk_dh($S, s_sk) ]
+  --[ Source_Read($S, m) ]->
+  []
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
 
 restriction Neq:
   "All x #t. Neq(x,x) @ #t ==> F"
+
+lemma Symmetric_Encryption_Adversary [sources]:
+  "All msg key #t.
+    Symmetric_Encryption_Adversary(msg, key) @ #t
+    ==>
+    (Ex #x. K(msg) @ #x & #x < #t) & (Ex #x. K(key) @ #x & #x < #t)"
 
 lemma Executability_Submission:
   exists-trace
@@ -138,24 +145,23 @@ lemma Executability_Submission:
     & Journalist_Read(j, m) @ #t2
     & (not Ex #x. SomeCompromise() @ #x)"
 
-// lemma Executability_Response:
-//   exists-trace
-//   "Ex #t1 #t2 #t3 s j m_old m.
-//       Source_Submission(s, j, m_old) @ #t1
-//     & Journalist_Response(j, m_old, m) @ #t2
-//     & Source_Read(s, m) @ #t3
-//     & (not Ex #x. SomeCompromise() @ #x)"
+lemma Executability_Response:
+  exists-trace
+  "Ex #t1 #t2 s j m_old m.
+      Journalist_Response(j, m_old, m) @ #t1
+    & Source_Read(s, m) @ #t2
+    & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Confidentiality_Submission:
   all-traces
   "All #t1 s j m. Source_Submission(s, j, m) @ #t1
     ==> (not Ex #x. K(m) @ #x) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
 
-// lemma Confidentiality_Response:
-//   all-traces
-//   "All #t1 #t2 s j m_old m. 
-//     Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
-//     ==> 
-//     ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
+lemma Confidentiality_Response:
+  all-traces
+  "All #t1 #t2 s j m_old m. 
+    Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
+    ==> 
+    ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. Reveal(s) @ #x) | (Ex #x. Reveal(j) @ #x)"
 
 end
