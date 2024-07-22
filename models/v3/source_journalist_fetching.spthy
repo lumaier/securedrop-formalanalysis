@@ -62,7 +62,8 @@ rule Source_Submit:
     , Source_Submission($S, $J, ~m)
     , Symmetric_Encryption_Source_OUT(<~m, s_pk, sc_pk>, k)]->
   [ Out(<c, m_gdh, me_pk>)
-  , Source_Submit($S, $J) ]
+  , Source_Submit($S, $J)
+  , !Source_Keys(s_pk, sc_pk, k) ]
 
 // rule Journalist_Fetch:
 //   let kmid = pmgdh^jc_sk 
@@ -77,14 +78,11 @@ rule Source_Submit:
 //   , Journalist_Fetch($J, m_id) ]
 
 rule Journalist_Recv:
-  let k = me_pk^je_sk 
-      msg = sdec(c, k)
-      m = fst(msg)
-      s_pk = fst(snd(msg))
-      sc_pk = snd(snd(msg))
+  let k = me_pk^je_sk
   in
-  [ In(<c, me_pk>)
+  [ In(<senc(<m, s_pk, sc_pk>, me_pk^je_sk), me_pk>)
   , Journalist_Ephemeral_Key($J, je_sk)
+  , !Source_Keys(s_pk, sc_pk, me_pk^je_sk)
   // , Journalist_Fetch($J, m_id) 
 ]
   --[ Journalist_Read($J, m)
