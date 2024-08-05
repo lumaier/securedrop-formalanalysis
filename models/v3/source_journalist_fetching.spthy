@@ -41,7 +41,8 @@ rule Journalist_Init:
 
 rule Source_Submit:
   let k = je_pk^~me_sk
-      c = senc(<~m, s_pk, sc_pk>, k)
+      m = <~msg, s_pk, sc_pk>
+      c = senc(m, k)
       me_pk = 'g'^~me_sk
       m_gdh = jc_pk^~me_sk 
   in
@@ -52,14 +53,14 @@ rule Source_Submit:
   // -> prevents partial deconstructions
   , !Journalist_Init($J, je_pk, jc_pk)
   , In(<je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
-  , Fr(~m)
+  , Fr(~msg)
   , Fr(~me_sk) ]
   --[ Eq(verify(sig_je_pk, je_pk, j_pk), true)
     , Eq(verify(sig_jc_pk, jc_pk, j_pk), true)
     , Neq(je_pk, jc_pk)
     , Neq(s_pk, sc_pk)
-    , Symmetric_Encryption_OUT(<~m, s_pk, sc_pk>, k)
-    , Source_Submission($S, $J, ~m) ]->
+    , Symmetric_Encryption_OUT(m, k)
+    , Source_Submission($S, $J, ~msg) ]->
   [ Out(<c, m_gdh, me_pk>)
   , !Source_Keys(s_pk, sc_pk, k) ]
 
@@ -82,29 +83,30 @@ rule Journalist_Fetch:
 rule Journalist_Recv:
   let k = me_pk^je_sk
   in
-  [ In(<senc(<m, s_pk, sc_pk>, me_pk^je_sk), me_pk>)
+  [ In(<senc(<msg, s_pk, sc_pk>, me_pk^je_sk), me_pk>)
   , Journalist_Ephemeral_Key($J, je_sk)
   // this fact ensures that only a source with access to k could have generated the key (authenticated encryption) 
   // -> prevents partial deconstructions
   , !Source_Keys(s_pk, sc_pk, me_pk^je_sk)
   , Journalist_Fetch($J, m_id) 
 ]
-  --[ Journalist_Read($J, m) ]->
-  [ Journalist_Recv($J, m, s_pk, sc_pk) ]
+  --[ Journalist_Read($J, msg) ]->
+  [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
 
 rule Journalist_Reply:
   let k = s_pk^~me_sk
       je_pk = 'g'^~je_sk
-      c = senc(<~m, je_pk>, k)
+      m = <~msg, je_pk>
+      c = senc(m, k)
       me_pk = 'g'^~me_sk
       m_gdh = sc_pk^~me_sk
   in
-  [ Journalist_Recv($J, m_old, s_pk, sc_pk)
-  , Fr(~m)
+  [ Journalist_Recv($J, msg_old, s_pk, sc_pk)
+  , Fr(~msg)
   , Fr(~me_sk)
   , Fr(~je_sk) ]
-  --[ Journalist_Response($J, m_old, ~m)
-    , Symmetric_Encryption_OUT(<~m, je_pk>, k) ]->
+  --[ Journalist_Response($J, msg_old, ~msg)
+    , Symmetric_Encryption_OUT(m, k) ]->
   [ Out(<c, m_gdh, me_pk>) ]
 
 rule Source_Fetch:
@@ -123,14 +125,14 @@ rule Source_Fetch:
 
 rule Source_Recv:
   let k = me_pk^s_sk
-      msg = sdec(c, k)
-      m = fst(msg)
-      je_pk = snd(msg)
+      m = sdec(c, k)
+      msg = fst(m)
+      je_pk = snd(m)
   in
   [ In(<c, me_pk>)
   , Source_Fetch($S, m_id)
   , !Ltk_dh($S, s_sk) ]
-  --[ Source_Read($S, m) ]->
+  --[ Source_Read($S, msg) ]->
   []
 
 restriction Eq:
