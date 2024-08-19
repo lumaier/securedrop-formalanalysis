@@ -32,3 +32,9 @@ It seems that with [this fix](https://github.com/lumaier/securedrop-formalanalys
 The problem wasn't the above: Instead we have to "play god" a bit by checking that $JC_{PK}$ really comes from a journalist. Since we have its signature, this is a valid assumption (and a authentic key - in reality signed by the newsroom and FPF).
 
 We also need to check that $JC_{PK} != JE_{PK}$. Otherwise the source leaks $k = DH(JE_{PK},ME_{SK}) = DH(JC_{PK},ME_{SK}) = mgdh$ if an adversary sends the same key twice. It can then decrypt the message.
+
+## v7
+
+### `source_newsroom.spthy`
+
+This model extends `v2/source_journalist_fetching.spthy`. Now, the source communicates with a newsroom (not a journalist). A valid recipient is any journalist who was verified by the newsroom.
