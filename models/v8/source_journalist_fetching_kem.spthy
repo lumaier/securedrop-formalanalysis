@@ -118,7 +118,10 @@ rule Journalist_Reply:
   , Fr(~je_sk)
   , Fr(~ss) ]
   --[ Journalist_Response($J, msg_old, ~msg)
-    , Symmetric_Encryption_OUT(m, k) ]->
+    , Symmetric_Encryption_OUT(m, k)
+    , Running_Response_Journalist(je_pk, s_pk, k)
+    , Honest(je_pk)
+    , Honest(s_pk) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Source_Fetch:
@@ -141,11 +144,15 @@ rule Source_Recv:
       m = sdec(c, k)
       msg = fst(m)
       je_pk = snd(m)
+      s_pk = pk(s_sk)
   in
   [ In(<c, me_pk, ss_encap>)
   , Source_Fetch($S, m_id)
   , !Ltk($S, s_sk) ]
-  --[ Source_Read($S, msg) ]->
+  --[ Source_Read($S, msg)
+    , Commit_Response_Source(s_pk, je_pk, k)
+    , Honest(s_pk)
+    , Honest(je_pk) ]->
   []
 
 restriction Eq:
@@ -193,9 +200,14 @@ lemma Confidentiality_Response:
     ==> 
     ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. SomeCompromise() @ #x)"
 
-lemma Non_Injective_Key_Agreement:
+lemma Non_Injective_Key_Agreement_Submission:
   all-traces
   "All #t #t2 a b k. (Commit_Submission(a, b, k) @ #t & Registered(b) @ #t2) 
     ==> (Ex #x. Running_Submission(b, a, k) @ #x) | (Ex P #x. Reveal(P) @ #x & Honest(P) @ #t)"
 
+lemma Non_Injective_Key_Agreement_Response:
+  all-traces
+  "All #t a b k. (Commit_Response_Source(a, b, k) @ #t) 
+    ==> (Ex #x. Running_Response_Journalist(b, a, k) @ #x) | (Ex P #x. Reveal(P) @ #x & Honest(P) @ #t)"
+  
 end
