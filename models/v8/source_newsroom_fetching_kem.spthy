@@ -52,10 +52,12 @@ rule Journalist_Enrollment:
   [ !Ltk($NR, nr_sk)
   , !Pk($J, j_pk) ]
   --[ Journalist_Verified($NR, $J) ]->
-  [ Out(<j_pk, sig_j_pk>) ]
+  [ Out(<j_pk, sig_j_pk>)
+  , !Journalist_Enrolled($NR, $J) ]
 
 rule Source_Submit [derivchecks]:
-  let jc_pk = 'g'^jc_sk
+  let sc_pk = 'g'^sc_sk
+      jc_pk = 'g'^jc_sk
       k = hkdf(~ss)
       m = <~msg, s_pk, sc_pk>
       c = senc(m, k)
@@ -65,7 +67,7 @@ rule Source_Submit [derivchecks]:
   in
   [ !Pk($NR, nr_pk)
   , !Pk($S, s_pk)
-  , !Pk_dh($S, sc_pk)
+  , !Ltk_dh($S, sc_sk)
   , In(<j_pk, sig_j_pk, je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
   , Fr(~msg)
   , Fr(~ss)
@@ -75,7 +77,8 @@ rule Source_Submit [derivchecks]:
     , Eq(verify(sig_jc_pk, <'fetch', jc_pk>, j_pk), true)
     , Neq(s_pk, sc_pk)
     , Symmetric_Encryption_OUT(m, k)
-    , Source_Submission($S, $NR, ~msg) ]->
+    , Source_Submission($S, $NR, ~msg)
+    , Running_Submission($S, $NR, k) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Journalist_Fetch:
@@ -102,8 +105,14 @@ rule Journalist_Recv [derivchecks]:
   [ In(<senc(<msg, s_pk, sc_pk>, k), ss_encap>)
   , Journalist_Ephemeral_Key($J, je_sk)
   , Journalist_Fetch($J, m_id) 
+  , !Pk($S, s_pk)
+  , !Journalist_Enrolled($NR, $J)
 ]
-  --[ Journalist_Read($J, msg) ]->
+  --[ Journalist_Read($J, msg)
+    , Commit_Submission($NR, $S, k)
+    , Honest($NR)
+    , Honest($J)
+    , Honest($S) ]->
   [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
 
 rule Journalist_Reply:
@@ -168,6 +177,13 @@ lemma Symmetric_Encryption_Adversary [sources]:
     ((Ex #x. KU(m) @ #x & #x < #t) & (Ex #x. KU(key) @ #x & #x < #t))
     | (Ex #x. Symmetric_Encryption_OUT(m, key) @ #x & #x < #t)"
 
+lemma Verified_Journalist [reuse]:
+  all-traces
+  "All #t1 #t2 s nr j m. 
+      Source_Submission(s, nr, m) @ #t1
+    & Journalist_Read(j, m) @ #t2
+    ==> (Ex #x. Journalist_Verified(nr, j) @ #x) | (Ex #x. SomeCompromise() @ #x)"  
+
 lemma Executability_Submission:
   exists-trace
   "Ex #t1 #t2 s j nr m.
@@ -184,13 +200,6 @@ lemma Executability_Response:
     & Source_Read(s, m) @ #t4
     & (not Ex #x. SomeCompromise() @ #x)"
 
-lemma Verified_Journalist:
-  all-traces
-  "All #t1 #t2 s nr j m. 
-      Source_Submission(s, nr, m) @ #t1
-    & Journalist_Read(j, m) @ #t2
-    ==> (Ex #x. Journalist_Verified(nr, j) @ #x & #x < #t1) | (Ex #x. SomeCompromise() @ #x)"
-
 lemma Confidentiality_Submission:
   all-traces
   "All #t1 s nr m. Source_Submission(s, nr, m) @ #t1
@@ -202,5 +211,11 @@ lemma Confidentiality_Response:
     Source_Submission(s, nr, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
     ==> 
     ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. SomeCompromise() @ #x)"
+
+lemma Non_Injective_Key_Agreement_Submission:
+  all-traces
+  "All #t a b k. (Commit_Submission(a, b, k) @ #t) 
+    ==> (Ex #x. Running_Submission(b, a, k) @ #x) | (Ex P #x. Reveal(P) @ #x & Honest(P) @ #t)"
+  
 
 end
