@@ -67,6 +67,7 @@ rule Source_Submit [derivchecks]:
   in
   [ !Pk($NR, nr_pk)
   , !Pk($S, s_pk)
+  , !Pk($J, j_pk)
   , !Ltk_dh($S, sc_sk)
   , In(<j_pk, sig_j_pk, je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
   , Fr(~msg)
@@ -76,7 +77,7 @@ rule Source_Submit [derivchecks]:
     , Eq(verify(sig_je_pk, <'ephemeral', je_pk>, j_pk), true)
     , Eq(verify(sig_jc_pk, <'fetch', jc_pk>, j_pk), true)
     , Symmetric_Encryption_OUT(m, k)
-    , Source_Submission($S, $NR, ~msg)
+    , Source_Submission($S, $J, $NR, ~msg)
     , Running_Submission($S, $J, k) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
@@ -158,9 +159,6 @@ rule Source_Recv:
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
 
-restriction Neq:
-  "All x #t. Neq(x,x) @ #t ==> F"
-
 /* Without this Source-Lemma, Tamarin thinks that the "Fetch" Rules act as decryption oracles.
    This Source-Lemma ensures that if a party gets a ciphertext, either the adversary encrypted the message (i.e, it knew the message)
    or the adversary got the ciphertext from an output in the protocol.
@@ -175,21 +173,21 @@ lemma Symmetric_Encryption_Adversary [sources]:
 lemma Verified_Journalist [reuse]:
   all-traces
   "All #t1 #t2 s nr j m. 
-      Source_Submission(s, nr, m) @ #t1
+      Source_Submission(s, j, nr, m) @ #t1
     & Journalist_Read(j, m) @ #t2
     ==> (Ex #x. Journalist_Verified(nr, j) @ #x) | (Ex #x. SomeCompromise() @ #x)"  
 
 lemma Executability_Submission:
   exists-trace
   "Ex #t1 #t2 s j nr m.
-      Source_Submission(s, nr, m) @ #t1
+      Source_Submission(s, j, nr, m) @ #t1
     & Journalist_Read(j, m) @ #t2
     & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Executability_Response:
   exists-trace
   "Ex #t1 #t2 #t3 #t4 s j nr m_old m.
-      Source_Submission(s, nr, m_old) @ #t1
+      Source_Submission(s, j, nr, m_old) @ #t1
     & Journalist_Read(j, m_old) @ #t2
     & Journalist_Response(j, m_old, m) @ #t3
     & Source_Read(s, m) @ #t4
@@ -197,13 +195,13 @@ lemma Executability_Response:
 
 lemma Confidentiality_Submission:
   all-traces
-  "All #t1 s nr m. Source_Submission(s, nr, m) @ #t1
+  "All #t1 s j nr m. Source_Submission(s, j, nr, m) @ #t1
     ==> (not Ex #x. K(m) @ #x) | (Ex #x. SomeCompromise() @ #x)"
 
 lemma Confidentiality_Response:
   all-traces
   "All #t1 #t2 s j nr m_old m. 
-    Source_Submission(s, nr, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
+    Source_Submission(s, j, nr, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
     ==> 
     ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. SomeCompromise() @ #x)"
 
@@ -211,8 +209,8 @@ lemma Non_Injective_Key_Agreement_Submission:
   all-traces
   "All #t source journalist k. (Commit_Submission(source, journalist, k) @ #t) 
     ==>   (Ex #x. Running_Submission(journalist, source, k) @ #x) 
-        | (Ex P #x. Reveal(source) @ #x)
-        | (Ex P #x. Reveal(journalist) @ #x)"
+        | (Ex #x. Reveal(source) @ #x)
+        | (Ex #x. Reveal(journalist) @ #x)"
   
 
 end
