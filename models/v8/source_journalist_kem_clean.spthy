@@ -89,7 +89,7 @@ rule Journalist_Fetch:
   , !Ltk_dh($J, jc_sk) ]
   // this action ensures that the adversary needs to know m_id and kmid to generate enc_m_id
   // -> prevents partial deconstructions
-  --[ Symmetric_Encryption_Adversary(m, kmid)
+  --[ Symmetric_Encryption_IN(m, kmid)
     , Eq(flag, 'm_id') // with this term we enforce Tamarin to "use" the decryted message. If terms are not used, Tamarin doesn't model whether decryption failed or not.
   ]->
   [ Out(m_id)
@@ -99,13 +99,15 @@ rule Journalist_Recv [derivchecks]:
   let ss = adec(ss_encap, je_sk)
       k = hkdf(ss)
       sc_pk = 'g'^sc_sk
+      m = <flag, msg, s_pk, sc_pk>
   in
-  [ In(<senc(<flag, msg, s_pk, sc_pk>, k), ss_encap>)
+  [ In(<senc(m, k), ss_encap>)
   , Journalist_Ephemeral_Key($J, je_sk)
   , Journalist_Fetch($J, m_id) 
   , !Pk($S, s_pk)
 ]
   --[ Journalist_Read($J, msg)
+    , Symmetric_Encryption_IN(m, k)
     , Commit_Submission($J, $S, k)
     , Eq(flag, 'msg')]->
   [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
@@ -134,7 +136,7 @@ rule Source_Fetch:
   in
   [ In(<pmgdh, senc(m, kmid)>)
   , !Ltk_dh($S, sc_sk) ]
-  --[ Symmetric_Encryption_Adversary(m, kmid)
+  --[ Symmetric_Encryption_IN(m, kmid)
     , Eq(flag, 'm_id') // with this term we enforce Tamarin to "use" the decryted message. If terms are not used, Tamarin doesn't model whether decryption failed or not.
     ]->
   [ Out(m_id)
@@ -143,11 +145,13 @@ rule Source_Fetch:
 rule Source_Recv:
   let ss = adec(ss_encap, s_sk)
       k = hkdf(ss)
+      m = <flag, msg, je_pk>
   in
-  [ In(<senc(<flag, msg, je_pk>, k), me_pk, ss_encap>)
+  [ In(<senc(m, k), me_pk, ss_encap>)
   , Source_Fetch($S, m_id)
   , !Ltk($S, s_sk) ]
   --[ Source_Read($S, msg)
+    , Symmetric_Encryption_IN(m, k)
     , Eq(flag, 'msg') ]->
   []
 
@@ -158,9 +162,9 @@ restriction Eq:
    This Source-Lemma ensures that if a party gets a ciphertext, either the adversary encrypted the message (i.e, it knew the message)
    or the adversary got the ciphertext from an output in the protocol.
 */
-lemma Symmetric_Encryption_Adversary [sources]:
+lemma Symmetric_Encryption [sources]:
   "All m key #t.
-    Symmetric_Encryption_Adversary(m, key) @ #t
+    Symmetric_Encryption_IN(m, key) @ #t
     ==>
     ((Ex #x. KU(m) @ #x & #x < #t) & (Ex #x. KU(key) @ #x & #x < #t))
     | (Ex #x. Symmetric_Encryption_OUT(m, key) @ #x & #x < #t)"
