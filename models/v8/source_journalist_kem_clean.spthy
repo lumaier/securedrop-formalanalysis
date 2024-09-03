@@ -59,7 +59,7 @@ rule Source_Submit [derivchecks]:
   let sc_pk = 'g'^sc_sk
       jc_pk = 'g'^jc_sk
       k = hkdf(~ss)
-      m = <~msg, s_pk, sc_pk>
+      m = <'msg', ~msg, s_pk, sc_pk>
       c = senc(m, k)
       ss_encap = aenc(~ss, je_pk)
       me_pk = 'g'^~me_sk
@@ -82,12 +82,10 @@ rule Source_Submit [derivchecks]:
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Journalist_Fetch:
-  let kmid = pmgdh^jc_sk 
-      m = sdec(enc_m_id, kmid)
-      flag = fst(m)
-      m_id = snd(m)
+  let kmid = pmgdh^jc_sk
+      m = <flag, m_id>
   in
-  [ In(<pmgdh, enc_m_id>)
+  [ In(<pmgdh, senc(m, kmid)>)
   , !Ltk_dh($J, jc_sk) ]
   // this action ensures that the adversary needs to know m_id and kmid to generate enc_m_id
   // -> prevents partial deconstructions
@@ -102,19 +100,20 @@ rule Journalist_Recv [derivchecks]:
       k = hkdf(ss)
       sc_pk = 'g'^sc_sk
   in
-  [ In(<senc(<msg, s_pk, sc_pk>, k), ss_encap>)
+  [ In(<senc(<flag, msg, s_pk, sc_pk>, k), ss_encap>)
   , Journalist_Ephemeral_Key($J, je_sk)
   , Journalist_Fetch($J, m_id) 
   , !Pk($S, s_pk)
 ]
   --[ Journalist_Read($J, msg)
-    , Commit_Submission($J, $S, k)]->
+    , Commit_Submission($J, $S, k)
+    , Eq(flag, 'msg')]->
   [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
 
 rule Journalist_Reply:
   let k = hkdf(~ss)
       je_pk = pk(~je_sk)
-      m = <~msg, je_pk>
+      m = <'msg', ~msg, je_pk>
       c = senc(m, k)
       ss_encap = aenc(~ss, s_pk)
       me_pk = 'g'^~me_sk
@@ -130,12 +129,10 @@ rule Journalist_Reply:
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Source_Fetch:
-  let kmid = pmgdh^sc_sk 
-      m = sdec(enc_m_id, kmid)
-      flag = fst(m)
-      m_id = snd(m)
+  let kmid = pmgdh^sc_sk
+      m = <flag, m_id>
   in
-  [ In(<pmgdh, enc_m_id>)
+  [ In(<pmgdh, senc(m, kmid)>)
   , !Ltk_dh($S, sc_sk) ]
   --[ Symmetric_Encryption_Adversary(m, kmid)
     , Eq(flag, 'm_id') // with this term we enforce Tamarin to "use" the decryted message. If terms are not used, Tamarin doesn't model whether decryption failed or not.
@@ -146,14 +143,12 @@ rule Source_Fetch:
 rule Source_Recv:
   let ss = adec(ss_encap, s_sk)
       k = hkdf(ss)
-      m = sdec(c, k)
-      msg = fst(m)
-      je_pk = snd(m)
   in
-  [ In(<c, me_pk, ss_encap>)
+  [ In(<senc(<flag, msg, je_pk>, k), me_pk, ss_encap>)
   , Source_Fetch($S, m_id)
   , !Ltk($S, s_sk) ]
-  --[ Source_Read($S, msg) ]->
+  --[ Source_Read($S, msg)
+    , Eq(flag, 'msg') ]->
   []
 
 restriction Eq:
