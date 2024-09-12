@@ -13,7 +13,7 @@ rule Register_Newsroom_Key:
 
 rule Reveal_Newsroom_Key:
   [ !Ltk_Newsroom(A, ltk) ]
-  --[ Reveal_Newsroom(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Newsroom_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Register_Source_Fetching_Key:
@@ -24,12 +24,12 @@ rule Register_Source_Fetching_Key:
 
 rule Reveal_Source_Fetching_Key:
   [ !Ltk_Source_Fetching(A, ltk) ]
-  --[ Reveal_Source_Fetching(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Source_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Reveal_Source_Fetching_Public_Key:
   [ !Pk_Source_Fetching(A, public_component) ]
-  --[ Reveal_Source_Fetching_Public(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Source_Fetching_Public_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(public_component) ]
 
 rule Register_Source_Encryption_Key:
@@ -39,12 +39,12 @@ rule Register_Source_Encryption_Key:
 
 rule Reveal_Source_Encryption_Key:
   [ !Ltk_Source_Encryption(A, ltk) ]
-  --[ Reveal_Source_Encryption(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Source_Encryption_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Reveal_Source_Encryption_Public_Key:
   [ !Pk_Source_Encryption(A, public_component) ]
-  --[ Reveal_Source_Encryption_Public(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Source_Encryption_Public_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(public_component) ]
 
 rule Register_Journalist_Signing_Key:
@@ -54,7 +54,7 @@ rule Register_Journalist_Signing_Key:
 
 rule Reveal_Journalist_Signing_Key:
   [ !Ltk_Journalist_Signing(A, ltk) ]
-  --[ Reveal_Journalist_Signing(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Journalist_Signing_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Register_Journalist_Fetching_Key:
@@ -65,7 +65,7 @@ rule Register_Journalist_Fetching_Key:
 
 rule Reveal_Journalist_Fetching_Key:
   [ !Ltk_Journalist_Fetching(A, ltk) ]
-  --[ Reveal_Journalist_Fetching(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Journalist_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Journalist_Init:
@@ -241,22 +241,23 @@ lemma Confidentiality_Submission:
 "All #t1 s j nr m. 
         Source_Submission(s, j, nr, m) @ #t1
   ==>   (not Ex #x. K(m) @ #x) 
-      | (Ex #x. SomeCompromise() @ #x)"
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)"
 
 lemma Confidentiality_Response:
 "All #t1 #t2 s j nr m_old m. 
         Source_Submission(s, j, nr, m_old) @ #t1 
       & Journalist_Response(j, m_old, m) @ #t2
-  ==>   ( (not Ex #x. K(m_old) @ #x) 
-        & (not Ex #x. K(m) @ #x)) 
-      | (Ex #x. SomeCompromise() @ #x)"
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x)
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)"
 
 lemma Non_Injective_Key_Agreement_Submission:
-"All #t source journalist k. 
-        Commit_Submission(source, journalist, k) @ #t
-  ==>   (Ex #x. Running_Submission(journalist, source, k) @ #x) 
-      | (Ex #x. Reveal(source) @ #x)
-      | (Ex #x. Reveal(journalist) @ #x)"
+"All #t s j k. 
+        Commit_Submission(s, j, k) @ #t
+  ==>   (Ex #x. Running_Submission(j, s, k) @ #x) 
+      | (Ex #x. SomeCompromise() @ #x)"
   
 
 end
