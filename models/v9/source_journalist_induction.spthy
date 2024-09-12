@@ -4,32 +4,75 @@ begin
 builtins: symmetric-encryption, asymmetric-encryption, diffie-hellman, signing
 functions: hkdf/1
 
-rule Register_pk:
-  [ Fr(~ltk) ]
-  --[ Registered(pk(~ltk)) ]->
-  [ !Ltk($A, ~ltk), !Pk($A, pk(~ltk)), Out(pk(~ltk))]
+// Rules for registering the keys
 
-rule Reveal_ltk:
-  [ !Ltk(A, ltk) ]
-  --[ Reveal(A), Reveal(pk(ltk)), SomeCompromise() ]->
+rule Register_Newsroom_Key:
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk_Newsroom($A, ~ltk), !Pk_Newsroom($A, pk(~ltk)), Out(pk(~ltk)) ]
+
+rule Reveal_Newsroom_Key:
+  [ !Ltk_Newsroom(A, ltk) ]
+  --[ Reveal_Newsroom_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Register_dh_pk:
+rule Register_Source_Fetching_Key:
   let public_component = 'g'^~ltk in
   [ Fr(~ltk) ]
   -->
-  [ !Ltk_dh($A, ~ltk), !Pk_dh($A, public_component), Out(public_component)]
+  [ !Ltk_Source_Fetching($A, ~ltk), !Pk_Source_Fetching($A, public_component) ]
 
-rule Reveal_dh_ltk:
-  [ !Ltk_dh(A, ltk) ]
-  --[ Reveal(A), SomeCompromise() ]->
+rule Reveal_Source_Fetching_Key:
+  [ !Ltk_Source_Fetching(A, ltk) ]
+  --[ Reveal_Source_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
+  [ Out(ltk) ]
+
+rule Reveal_Source_Fetching_Public_Key:
+  [ !Pk_Source_Fetching(A, public_component) ]
+  --[ Reveal_Source_Fetching_Public_Key(A), Reveal(A), SomeCompromise() ]->
+  [ Out(public_component) ]
+
+rule Register_Source_Encryption_Key:
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk_Source_Encryption($A, ~ltk), !Pk_Source_Encryption($A, pk(~ltk)) ]
+
+rule Reveal_Source_Encryption_Key:
+  [ !Ltk_Source_Encryption(A, ltk) ]
+  --[ Reveal_Source_Encryption_Key(A), Reveal(A), SomeCompromise() ]->
+  [ Out(ltk) ]
+
+rule Reveal_Source_Encryption_Public_Key:
+  [ !Pk_Source_Encryption(A, public_component) ]
+  --[ Reveal_Source_Encryption_Public_Key(A), Reveal(A), SomeCompromise() ]->
+  [ Out(public_component) ]
+
+rule Register_Journalist_Signing_Key:
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk_Journalist_Signing($A, ~ltk), !Pk_Journalist_Signing($A, pk(~ltk)), Out(pk(~ltk)) ]
+
+rule Reveal_Journalist_Signing_Key:
+  [ !Ltk_Journalist_Signing(A, ltk) ]
+  --[ Reveal_Journalist_Signing_Key(A), Reveal(A), SomeCompromise() ]->
+  [ Out(ltk) ]
+
+rule Register_Journalist_Fetching_Key:
+  let public_component = 'g'^~ltk in
+  [ Fr(~ltk) ]
+  -->
+  [ !Ltk_Journalist_Fetching($A, ~ltk), !Pk_Journalist_Fetching($A, public_component), Out(public_component) ]
+
+rule Reveal_Journalist_Fetching_Key:
+  [ !Ltk_Journalist_Fetching(A, ltk) ]
+  --[ Reveal_Journalist_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Journalist_Init:
   let sig_jc_pk = sign(<'fetch', jc_pk>, j_sk)
   in
-  [ !Ltk($J, j_sk)
-  , !Pk_dh($J, jc_pk)
+  [ !Ltk_Journalist_Signing($J, j_sk)
+  , !Pk_Journalist_Fetching($J, jc_pk)
   ]
   -->
   [ Out(<jc_pk, sig_jc_pk>) ]
@@ -38,51 +81,57 @@ rule Journalist_Register_Ephemeral_Key:
   let je_pk = pk(~je_sk)
       sig_je_pk = sign(<'ephemeral', je_pk>, j_sk)
   in
-  [ !Ltk($J, j_sk)
-  , Fr(~je_sk)
-  ]
+  [ !Ltk_Journalist_Signing($J, j_sk)
+  , Fr(~je_sk) ]
   -->
   [ Out(<je_pk, sig_je_pk>)
-  , Journalist_Ephemeral_Key($J, ~je_sk)
-  ]
+  , Journalist_Ephemeral_Key($J, ~je_sk) ]
+
+rule Journalist_Enrollment:
+  let sig_j_pk = sign(j_pk, nr_sk)
+  in
+  [ !Ltk_Newsroom($NR, nr_sk)
+  , !Pk_Journalist_Signing($J, j_pk) ]
+  --[ Journalist_Verified($NR, $J) ]->
+  [ Out(<j_pk, sig_j_pk>)
+  , !Journalist_Enrolled($NR, $J) ]
 
 rule Source_Submit [derivchecks]:
-  let jc_pk = 'g'^jc_sk
+  let s_pk = pk(s_sk)
+      sc_pk = 'g'^sc_sk
+      jc_pk = 'g'^jc_sk
       k = hkdf(~ss)
-      m = <~msg, s_pk, sc_pk>
+      m = <'msg', ~msg, s_pk, sc_pk>
       c = senc(m, k)
       ss_encap = aenc(~ss, je_pk)
       me_pk = 'g'^~me_sk
       m_gdh = jc_pk^~me_sk 
   in
-  [ !Pk($J, j_pk)
-  , !Pk($S, s_pk)
-  , !Pk_dh($S, sc_pk)
-  , In(<je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
+  [ !Ltk_Source_Encryption($S, s_sk)
+  , !Ltk_Source_Fetching($S, sc_sk)
+  , !Pk_Newsroom($NR, nr_pk)
+  , !Pk_Journalist_Signing($J, j_pk)
+  , In(<j_pk, sig_j_pk, je_pk, sig_je_pk, jc_pk, sig_jc_pk>)
   , Fr(~msg)
   , Fr(~ss)
   , Fr(~me_sk) ]
-  --[ Eq(verify(sig_je_pk, <'ephemeral', je_pk>, j_pk), true)
+  --[ Eq(verify(sig_j_pk, j_pk, nr_pk), true)
+    , Eq(verify(sig_je_pk, <'ephemeral', je_pk>, j_pk), true)
     , Eq(verify(sig_jc_pk, <'fetch', jc_pk>, j_pk), true)
-    , Neq(s_pk, sc_pk)
     , Symmetric_Encryption_OUT(m, k)
-    , Source_Submission($S, $J, ~msg)
-    , Running_Submission(s_pk, $J, k)
-    , Honest(s_pk)
-    , Honest($J) ]->
+    , Source_Submission($S, $J, $NR, ~msg)
+    , Running_Submission($S, $J, k) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Journalist_Fetch:
-  let kmid = pmgdh^jc_sk 
-      m = sdec(enc_m_id, kmid)
-      flag = fst(m)
-      m_id = snd(m)
+  let kmid = pmgdh^jc_sk
+      m = <flag, m_id>
   in
-  [ In(<pmgdh, enc_m_id>)
-  , !Ltk_dh($J, jc_sk) ]
+  [ In(<pmgdh, senc(m, kmid)>)
+  , !Ltk_Journalist_Fetching($J, jc_sk) ]
   // this action ensures that the adversary needs to know m_id and kmid to generate enc_m_id
   // -> prevents partial deconstructions
-  --[ Symmetric_Encryption_Adversary(m, kmid)
+  --[ Symmetric_Encryption_IN(m, kmid)
     , Eq(flag, 'm_id') // with this term we enforce Tamarin to "use" the decryted message. If terms are not used, Tamarin doesn't model whether decryption failed or not.
   ]->
   [ Out(m_id)
@@ -92,21 +141,22 @@ rule Journalist_Recv [derivchecks]:
   let ss = adec(ss_encap, je_sk)
       k = hkdf(ss)
       sc_pk = 'g'^sc_sk
+      m = <flag, msg, s_pk, sc_pk>
   in
-  [ In(<senc(<msg, s_pk, sc_pk>, k), ss_encap>)
+  [ In(<senc(m, k), ss_encap>)
   , Journalist_Ephemeral_Key($J, je_sk)
-  , Journalist_Fetch($J, m_id)
-]
+  , Journalist_Fetch($J, m_id) 
+  , !Pk_Source_Encryption($S, s_pk) ]
   --[ Journalist_Read($J, msg)
-    , Commit_Submission($J, s_pk, k)
-    , Honest(s_pk)
-    , Honest($J) ]->
+    , Symmetric_Encryption_IN(m, k)
+    , Commit_Submission($J, $S, k)
+    , Eq(flag, 'msg')]->
   [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
 
 rule Journalist_Reply:
   let k = hkdf(~ss)
       je_pk = pk(~je_sk)
-      m = <~msg, je_pk>
+      m = <'msg', ~msg, je_pk>
       c = senc(m, k)
       ss_encap = aenc(~ss, s_pk)
       me_pk = 'g'^~me_sk
@@ -119,95 +169,95 @@ rule Journalist_Reply:
   , Fr(~ss) ]
   --[ Journalist_Response($J, msg_old, ~msg)
     , Symmetric_Encryption_OUT(m, k)
-    , Running_Response_Journalist(je_pk, s_pk, k)
-    , Honest(je_pk)
-    , Honest(s_pk) ]->
+    , Journalist_Fetch_OUT(m_gdh, ~me_sk) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
 rule Source_Fetch:
-  let kmid = pmgdh^sc_sk 
-      m = sdec(enc_m_id, kmid)
-      flag = fst(m)
-      m_id = snd(m)
+  let kmid = pmgdh^sc_sk
+      m = <flag, m_id>
   in
-  [ In(<pmgdh, enc_m_id>)
-  , !Ltk_dh($S, sc_sk) ]
-  --[ Symmetric_Encryption_Adversary(m, kmid)
+  [ In(<pmgdh, senc(m, kmid)>)
+  , !Ltk_Source_Fetching($S, sc_sk) ]
+  --[ Symmetric_Encryption_IN(m, kmid)
     , Eq(flag, 'm_id') // with this term we enforce Tamarin to "use" the decryted message. If terms are not used, Tamarin doesn't model whether decryption failed or not.
-    ]->
+    , Source_Fetch_IN(kmid, pmgdh, sc_sk) ]->
   [ Out(m_id)
   , Source_Fetch($S, m_id) ]
 
 rule Source_Recv:
   let ss = adec(ss_encap, s_sk)
       k = hkdf(ss)
-      m = sdec(c, k)
-      msg = fst(m)
-      je_pk = snd(m)
-      s_pk = pk(s_sk)
+      m = <flag, msg, je_pk>
   in
-  [ In(<c, me_pk, ss_encap>)
+  [ In(<senc(m, k), me_pk, ss_encap>)
   , Source_Fetch($S, m_id)
-  , !Ltk($S, s_sk) ]
+  , !Ltk_Source_Encryption($S, s_sk) ]
   --[ Source_Read($S, msg)
-    , Commit_Response_Source(s_pk, je_pk, k)
-    , Honest(s_pk)
-    , Honest(je_pk) ]->
+    , Symmetric_Encryption_IN(m, k)
+    , Eq(flag, 'msg') ]->
   []
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
 
-restriction Neq:
-  "All x #t. Neq(x,x) @ #t ==> F"
+// restriction Neq:
+//   "All x #t. Neq(x,x) @ #t ==> F"
 
 /* Without this Source-Lemma, Tamarin thinks that the "Fetch" Rules act as decryption oracles.
    This Source-Lemma ensures that if a party gets a ciphertext, either the adversary encrypted the message (i.e, it knew the message)
    or the adversary got the ciphertext from an output in the protocol.
 */
-lemma Symmetric_Encryption_Adversary [sources]:
-  "All m key #t.
-    Symmetric_Encryption_Adversary(m, key) @ #t
-    ==>
-    ((Ex #x. KU(m) @ #x & #x < #t) & (Ex #x. KU(key) @ #x & #x < #t))
-    | (Ex #x. Symmetric_Encryption_OUT(m, key) @ #x & #x < #t)"
+lemma Symmetric_Encryption [sources]:
+"All m key #t.
+        Symmetric_Encryption_IN(m, key) @ #t
+  ==>   ( (Ex #x. KU(m) @ #x & #x < #t)
+        & (Ex #x. KU(key) @ #x & #x < #t))
+      | (Ex #x. Symmetric_Encryption_OUT(m, key) @ #x & #x < #t)"
+
+// lemma Verified_Journalist [reuse]:
+// "All #t1 #t2 s nr j m. 
+//         Source_Submission(s, j, nr, m) @ #t1
+//       & Journalist_Read(j, m) @ #t2
+//   ==>   (Ex #x. Journalist_Verified(nr, j) @ #x)
+//       | (Ex #x. SomeCompromise() @ #x)"
 
 lemma Executability_Submission:
-  exists-trace
-  "Ex #t1 #t2 s j m.
-      Source_Submission(s, j, m) @ #t1
-    & Journalist_Read(j, m) @ #t2
-    & (not Ex #x. SomeCompromise() @ #x)"
+exists-trace
+"Ex #t1 #t2 s j nr m.
+        Source_Submission(s, j, nr, m) @ #t1
+      & Journalist_Read(j, m) @ #t2
+      & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Executability_Response:
-  exists-trace
-  "Ex #t1 #t2 #t3 #t4 s j m_old m.
-      Source_Submission(s, j, m_old) @ #t1
-    & Journalist_Read(j, m_old) @ #t2
-    & Journalist_Response(j, m_old, m) @ #t3
-    & Source_Read(s, m) @ #t4
-    & (not Ex #x. SomeCompromise() @ #x)"
+exists-trace
+"Ex #t1 #t2 #t3 #t4 s j nr m_old m.
+        Source_Submission(s, j, nr, m_old) @ #t1
+      & Journalist_Read(j, m_old) @ #t2
+      & Journalist_Response(j, m_old, m) @ #t3
+      & Source_Read(s, m) @ #t4
+      & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Confidentiality_Submission:
-  all-traces
-  "All #t1 s j m. Source_Submission(s, j, m) @ #t1
-    ==> (not Ex #x. K(m) @ #x) | (Ex #x. SomeCompromise() @ #x)"
+"All #t1 s j nr m. 
+        Source_Submission(s, j, nr, m) @ #t1
+  ==>   (not Ex #x. K(m) @ #x) 
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)"
 
 lemma Confidentiality_Response:
-  all-traces
-  "All #t1 #t2 s j m_old m. 
-    Source_Submission(s, j, m_old) @ #t1 & Journalist_Response(j, m_old, m) @ #t2
-    ==> 
-    ((not Ex #x. K(m_old) @ #x) & (not Ex #x. K(m) @ #x)) | (Ex #x. SomeCompromise() @ #x)"
+"All #t1 #t2 s j nr m_old m. 
+        Source_Submission(s, j, nr, m_old) @ #t1 
+      & Journalist_Response(j, m_old, m) @ #t2
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x)
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)"
 
 lemma Non_Injective_Key_Agreement_Submission:
-  all-traces
-  "All #t #t2 a b k. (Commit_Submission(a, b, k) @ #t & Registered(b) @ #t2) 
-    ==> (Ex #x. Running_Submission(b, a, k) @ #x) | (Ex P #x. Reveal(P) @ #x & Honest(P) @ #t)"
-
-lemma Non_Injective_Key_Agreement_Response:
-  all-traces
-  "All #t a b k. (Commit_Response_Source(a, b, k) @ #t) 
-    ==> (Ex #x. Running_Response_Journalist(b, a, k) @ #x) | (Ex P #x. Reveal(P) @ #x & Honest(P) @ #t)"
+"All #t s j k. 
+        Commit_Submission(s, j, k) @ #t
+  ==>   (Ex #x. Running_Submission(j, s, k) @ #x) 
+      | (Ex #x. SomeCompromise() @ #x)"
   
+
 end
