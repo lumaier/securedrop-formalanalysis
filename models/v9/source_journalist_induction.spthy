@@ -101,7 +101,7 @@ rule Source_Submit [derivchecks]:
       sc_pk = 'g'^sc_sk
       jc_pk = 'g'^jc_sk
       k = hkdf(~ss)
-      m = <'msg', ~msg, s_pk, sc_pk>
+      m = <'msg', ~msg, s_pk, sc_pk, $J>
       c = senc(m, k)
       ss_encap = aenc(~ss, je_pk)
       me_pk = 'g'^~me_sk
@@ -141,7 +141,7 @@ rule Journalist_Recv [derivchecks]:
   let ss = adec(ss_encap, je_sk)
       k = hkdf(ss)
       sc_pk = 'g'^sc_sk
-      m = <flag, msg, s_pk, sc_pk>
+      m = <flag, msg, s_pk, sc_pk, $J>
   in
   [ In(<senc(m, k), ss_encap>)
   , Journalist_Ephemeral_Key($J, je_sk)
@@ -255,8 +255,8 @@ lemma Confidentiality_Response:
 
 lemma Non_Injective_Key_Agreement_Submission:
 "All #t s j k. 
-        Commit_Submission(s, j, k) @ #t
-  ==>   (Ex #x. Running_Submission(j, s, k) @ #x) 
+        Commit_Submission(j, s, k) @ #t
+  ==>   (Ex #x. Running_Submission(s, j, k) @ #x) 
       | (Ex #x. SomeCompromise() @ #x)"
   
 
