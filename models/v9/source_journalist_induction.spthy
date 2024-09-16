@@ -8,73 +8,87 @@ functions: hkdf/1
 
 // KEM
 functions: encap/2, decap/2
-equations: decap(encap(k, pk(sk)), sk) = k
+equations: decap(encap(ss, pk(sk)), sk) = ss
 
-// Rules for registering the keys
+/*
 
-rule Register_Newsroom_Key:
+Color semantics:
+
+- Yellow (#FDFD96)      Key setup/distribution
+- Red (#FF6961)         Adversary activity
+- Light blue (#B4D9EF)  Message Fetching
+- Dark blue (#6495ED)   Messaging
+- Orange (#FF7F50)      Registration/Enrollment
+
+ */
+
+// Key Registration
+
+rule Register_Newsroom_Key [color=#FDFD96]:
   [ Fr(~ltk) ]
   -->
   [ !Ltk_Newsroom($A, ~ltk), !Pk_Newsroom($A, pk(~ltk)), Out(pk(~ltk)) ]
 
-rule Reveal_Newsroom_Key:
+rule Reveal_Newsroom_Key [color=#FF6961]:
   [ !Ltk_Newsroom(A, ltk) ]
   --[ Reveal_Newsroom_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Register_Source_Fetching_Key:
+rule Register_Source_Fetching_Key [color=#FDFD96]:
   let public_component = 'g'^~ltk in
   [ Fr(~ltk) ]
   -->
   [ !Ltk_Source_Fetching($A, ~ltk), !Pk_Source_Fetching($A, public_component) ]
 
-rule Reveal_Source_Fetching_Key:
+rule Reveal_Source_Fetching_Key [color=#FF6961]:
   [ !Ltk_Source_Fetching(A, ltk) ]
   --[ Reveal_Source_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Reveal_Source_Fetching_Public_Key:
+rule Reveal_Source_Fetching_Public_Key [color=#FF6961]:
   [ !Pk_Source_Fetching(A, public_component) ]
   --[ Reveal_Source_Fetching_Public_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(public_component) ]
 
-rule Register_Source_Encryption_Key:
+rule Register_Source_Encryption_Key [color=#FDFD96]:
   [ Fr(~ltk) ]
   -->
   [ !Ltk_Source_Encryption($A, ~ltk), !Pk_Source_Encryption($A, pk(~ltk)) ]
 
-rule Reveal_Source_Encryption_Key:
+rule Reveal_Source_Encryption_Key [color=#FF6961]:
   [ !Ltk_Source_Encryption(A, ltk) ]
   --[ Reveal_Source_Encryption_Key(A), Reveal_Source_Encryption_Key(pk(ltk)), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Reveal_Source_Encryption_Public_Key:
+rule Reveal_Source_Encryption_Public_Key [color=#FF6961]:
   [ !Pk_Source_Encryption(A, public_component) ]
   --[ Reveal_Source_Encryption_Public_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(public_component) ]
 
-rule Register_Journalist_Signing_Key:
+rule Register_Journalist_Signing_Key [color=#FDFD96]:
   [ Fr(~ltk) ]
   -->
   [ !Ltk_Journalist_Signing($A, ~ltk), !Pk_Journalist_Signing($A, pk(~ltk)), Out(pk(~ltk)) ]
 
-rule Reveal_Journalist_Signing_Key:
+rule Reveal_Journalist_Signing_Key [color=#FF6961]:
   [ !Ltk_Journalist_Signing(A, ltk) ]
   --[ Reveal_Journalist_Signing_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Register_Journalist_Fetching_Key:
+rule Register_Journalist_Fetching_Key [color=#FDFD96]:
   let public_component = 'g'^~ltk in
   [ Fr(~ltk) ]
   -->
   [ !Ltk_Journalist_Fetching($A, ~ltk), !Pk_Journalist_Fetching($A, public_component), Out(public_component) ]
 
-rule Reveal_Journalist_Fetching_Key:
+rule Reveal_Journalist_Fetching_Key [color=#FF6961]:
   [ !Ltk_Journalist_Fetching(A, ltk) ]
   --[ Reveal_Journalist_Fetching_Key(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
-rule Journalist_Init:
+// Journalist Enrollment
+
+rule Journalist_Init [color=#FF7F50]:
   let sig_jc_pk = sign(<'fetch', jc_pk>, j_sk)
   in
   [ !Ltk_Journalist_Signing($J, j_sk)
@@ -83,7 +97,7 @@ rule Journalist_Init:
   -->
   [ Out(<jc_pk, sig_jc_pk>) ]
 
-rule Journalist_Register_Ephemeral_Key:
+rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   let je_pk = pk(~je_sk)
       sig_je_pk = sign(<'ephemeral', je_pk>, j_sk)
   in
@@ -94,13 +108,13 @@ rule Journalist_Register_Ephemeral_Key:
   , Journalist_Ephemeral_Key($J, ~je_sk)
   , Journalist_Ephemeral_Key_Reveal($J, ~je_sk) ]
 
-rule Reveal_Journalist_Ephemeral_Key:
+rule Reveal_Journalist_Ephemeral_Key [color=#FF6961]:
   [ Journalist_Ephemeral_Key_Reveal(J, je_sk) ]
   --[ Reveal_Journalist_Ephemeral_Key(J, pk(je_sk)), Reveal(J), SomeCompromise() ]->
   [ Out(je_sk) ]
 
 
-rule Journalist_Enrollment:
+rule Journalist_Enrollment [color=#FF7F50]:
   let sig_j_pk = sign(j_pk, nr_sk)
   in
   [ !Ltk_Newsroom($NR, nr_sk)
@@ -109,7 +123,9 @@ rule Journalist_Enrollment:
   [ Out(<j_pk, sig_j_pk>)
   , !Journalist_Enrolled($NR, $J) ]
 
-rule Source_Submit [derivchecks]:
+// Messaging and Fetching Protocol
+
+rule Source_Submit [derivchecks, color=#6495ED]:
   let s_pk = pk(s_sk)
       sc_pk = 'g'^sc_sk
       jc_pk = 'g'^jc_sk
@@ -137,7 +153,7 @@ rule Source_Submit [derivchecks]:
     , Running_Submission($S, $J, k) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
-rule Journalist_Fetch:
+rule Journalist_Fetch [color=#B4D9EF]:
   let kmid = pmgdh^jc_sk
       m = <flag, m_id>
   in
@@ -151,7 +167,7 @@ rule Journalist_Fetch:
   [ Out(m_id)
   , Journalist_Fetch($J, m_id) ]
 
-rule Journalist_Recv [derivchecks]:
+rule Journalist_Recv [derivchecks, color=#6495ED]:
   let ss = decap(ss_encap, je_sk)
       k = hkdf(ss)
       sc_pk = 'g'^sc_sk
@@ -167,7 +183,7 @@ rule Journalist_Recv [derivchecks]:
     , Eq(flag, 'msg')]->
   [ Journalist_Recv($J, msg, s_pk, sc_pk) ]
 
-rule Journalist_Reply:
+rule Journalist_Reply [color=#6495ED]:
   let k = hkdf(~ss)
       m = <'msg', ~msg, $J>
       c = senc(m, k)
@@ -187,7 +203,7 @@ rule Journalist_Reply:
     , Journalist_Fetch_OUT(m_gdh, ~me_sk) ]->
   [ Out(<c, m_gdh, me_pk, ss_encap>) ]
 
-rule Source_Fetch:
+rule Source_Fetch [color=#B4D9EF]:
   let kmid = pmgdh^sc_sk
       m = <flag, m_id>
   in
@@ -199,7 +215,7 @@ rule Source_Fetch:
   [ Out(m_id)
   , Source_Fetch($S, m_id) ]
 
-rule Source_Recv:
+rule Source_Recv [color=#6495ED]:
   let ss = decap(ss_encap, s_sk)
       k = hkdf(ss)
       m = <flag, msg, $J>
@@ -212,7 +228,7 @@ rule Source_Recv:
     , Eq(flag, 'msg') ]->
   [ Source_Recv($S, msg, $J) ]
 
-rule Source_Reply [derivchecks]:
+rule Source_Reply [derivchecks, color=#6495ED]:
   let s_pk = pk(s_sk)
       sc_pk = 'g'^sc_sk
       jc_pk = 'g'^jc_sk
