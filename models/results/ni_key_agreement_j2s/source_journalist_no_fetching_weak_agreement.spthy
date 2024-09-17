@@ -128,7 +128,7 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
 
 rule Journalist_Reply [color=#6495ED]:
   let k = hkdf(~ss)
-      m = <'msg', ~msg, $J>
+      m = <'msg', ~msg, $J, sign(<'source', s_pk>, j_sk)>
       c = senc(m, k)
       ss_encap = encap(~ss, s_pk)
       me_pk = 'g'^~me_sk
@@ -149,13 +149,15 @@ rule Journalist_Reply [color=#6495ED]:
 rule Source_Recv [color=#6495ED]:
   let ss = decap(ss_encap, s_sk)
       k = hkdf(ss)
-      m = <flag, msg, $J>
+      m = <flag, msg, $J, sig_s_pk>
   in
   [ In(<senc(m, k), me_pk, ss_encap>)
-  , !Ltk_Source_Encryption($S, s_sk) ]
+  , !Ltk_Source_Encryption($S, s_sk)
+  , !Pk_Journalist_Signing($J, j_pk) ]
   --[ Source_Read($S, msg)
     , Symmetric_Encryption_IN(m, k)
     , Eq(flag, 'msg')
+    , Eq(verify(sig_s_pk, <'source', pk(s_sk)>, j_pk), true)
     , Commit($S, $J, k) ]->
   [ Source_Recv($S, msg, $J) ]
 
