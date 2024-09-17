@@ -135,13 +135,15 @@ rule Journalist_Reply [color=#6495ED]:
   in
   [ Journalist_Recv($J, msg_old, s_pk)
   , !Ltk_Journalist_Signing($J, j_sk)
+  , !Pk_Source_Encryption($S, s_pk)
   , Fr(~msg)
   , Fr(~me_sk)
   , Fr(~je_sk)
   , Fr(~ss) ]
   --[ Journalist_Response($J, msg_old, ~msg)
     , Journalist_Message_Sent($J, s_pk, ~msg)
-    , Symmetric_Encryption_OUT(m, k) ]->
+    , Symmetric_Encryption_OUT(m, k)
+    , Running($J, $S, k) ]->
   [ Out(<c, me_pk, ss_encap>) ]
 
 rule Source_Recv [color=#6495ED]:
@@ -153,7 +155,8 @@ rule Source_Recv [color=#6495ED]:
   , !Ltk_Source_Encryption($S, s_sk) ]
   --[ Source_Read($S, msg)
     , Symmetric_Encryption_IN(m, k)
-    , Eq(flag, 'msg') ]->
+    , Eq(flag, 'msg')
+    , Commit($S, $J, k) ]->
   [ Source_Recv($S, msg, $J) ]
 
 rule Source_Reply [derivchecks, color=#6495ED]:
