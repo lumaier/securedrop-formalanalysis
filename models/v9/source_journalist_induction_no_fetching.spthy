@@ -41,7 +41,7 @@ rule Register_Source_Encryption_Key [color=#FDFD96]:
 
 rule Reveal_Source_Encryption_Key [color=#FF6961]:
   [ !Ltk_Source_Encryption(A, ltk) ]
-  --[ Reveal_Source_Encryption_Key(A), Reveal_Source_Encryption_Key(pk(ltk)), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Source_Encryption_Key(A), Reveal_Source_Encryption_Key(pk(ltk)), Reveal_Longterm_Secret(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 rule Reveal_Source_Encryption_Public_Key [color=#FF6961]:
@@ -56,7 +56,7 @@ rule Register_Journalist_Signing_Key [color=#FDFD96]:
 
 rule Reveal_Journalist_Signing_Key [color=#FF6961]:
   [ !Ltk_Journalist_Signing(A, ltk) ]
-  --[ Reveal_Journalist_Signing_Key(A), Reveal(A), SomeCompromise() ]->
+  --[ Reveal_Journalist_Signing_Key(A), Reveal_Longterm_Secret(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
 
 // Journalist Enrollment
@@ -108,7 +108,7 @@ rule Source_Submit [derivchecks, color=#6495ED]:
     , Symmetric_Encryption_OUT(m, k)
     , Source_Submission($S, $J, $NR, ~msg)
     , Source_Message_Sent($S, $J, je_pk, $NR, ~msg)
-    , Running($S, $J, k) ]->
+    , Sent($S, $J, m) ]->
   [ Out(<c, me_pk, ss_encap>) ]
 
 rule Journalist_Recv [derivchecks, color=#6495ED]:
@@ -121,7 +121,7 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
   , !Pk_Source_Encryption($S, s_pk) ]
   --[ Journalist_Read($J, msg)
     , Symmetric_Encryption_IN(m, k)
-    , Commit($J, $S, k)
+    , Received($J, $S, m)
     , Eq(flag, 'msg')
     , Eq(verify(sig_J, <'journalist', $J>, s_pk), true)]->
   [ Journalist_Recv($J, msg, s_pk) ]
@@ -143,7 +143,7 @@ rule Journalist_Reply [color=#6495ED]:
   --[ Journalist_Response($J, msg_old, ~msg)
     , Journalist_Message_Sent($J, s_pk, ~msg)
     , Symmetric_Encryption_OUT(m, k)
-    , Running($J, $S, k) ]->
+    , Sent($J, $S, m) ]->
   [ Out(<c, me_pk, ss_encap>) ]
 
 rule Source_Recv [color=#6495ED]:
@@ -156,7 +156,7 @@ rule Source_Recv [color=#6495ED]:
   --[ Source_Read($S, msg)
     , Symmetric_Encryption_IN(m, k)
     , Eq(flag, 'msg')
-    , Commit($S, $J, k) ]->
+    , Received_TEMP($S, $J, m) ]->
   [ Source_Recv($S, msg, $J) ]
 
 rule Source_Reply [derivchecks, color=#6495ED]:
@@ -180,7 +180,7 @@ rule Source_Reply [derivchecks, color=#6495ED]:
     , Symmetric_Encryption_OUT(m, k)
     , Source_Message_Sent($S, $J, je_pk, $NR, ~msg)
     , Source_Response($S, $J, $NR, msg_old, ~msg)
-    , Running($S, $J, k) ]->
+    , Sent($S, $J, m) ]->
   [ Out(<c, me_pk, ss_encap>) ]
 
 restriction Eq:
@@ -248,20 +248,20 @@ lemma Confidentiality_Journalist_Message:
   ==>   (not Ex #x. K(m) @ #x)
       | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x)"
 
-lemma Non_Injective_Key_Agreement:
-"All #t a b k. 
-        Commit(b, a, k) @ #t
-  ==>   (Ex #x. Running(a, b, k) @ #x) 
-      | (Ex #x. Reveal(a) @ #x)
-      | (Ex #x. Reveal(b) @ #x)"
+lemma Non_Injective_Agreement:
+"All #t a b m. 
+        Received(b, a, m) @ #t
+  ==>   (Ex #x. Sent(a, b, m) @ #x & #x < #t) 
+      | (Ex #x. Reveal_Longterm_Secret(a) @ #x)
+      | (Ex #x. Reveal_Longterm_Secret(b) @ #x)"
   
-lemma Injective_Key_Agreement:
-"All #t a b k. 
-        Commit(b, a, k) @ #t
-  ==>   (Ex #x. Running(a, b, k) @ #x 
+lemma Injective_Agreement:
+"All #t a b m. 
+        Received(b, a, m) @ #t
+  ==>   (Ex #x. Sent(a, b, m) @ #x 
               & #x < #t
-              & not (Ex a2 b2 #t2. Commit(b2, a2, k) @ #t2 & not (#t2 = #t)))
-      | (Ex #x. Reveal(a) @ #x)
-      | (Ex #x. Reveal(b) @ #x)"
+              & not (Ex a2 b2 #t2. Received(b2, a2, m) @ #t2 & not (#t2 = #t)))
+      | (Ex #x. Reveal_Longterm_Secret(a) @ #x)
+      | (Ex #x. Reveal_Longterm_Secret(b) @ #x)"
 
 end
