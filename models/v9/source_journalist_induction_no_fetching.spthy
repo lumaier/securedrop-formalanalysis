@@ -234,7 +234,7 @@ exists-trace
       & Journalist_Read(j, m_new) @ #t6
       & (not Ex #x. SomeCompromise() @ #x)"
 
-lemma Confidentiality_Source_Message:
+lemma Secrecy_Source_Message:
 "All #t s j je_pk nr m. 
         Source_Message_Sent(s, j, je_pk, nr, m) @ #t
   ==>   (not Ex #x. K(m) @ #x)
@@ -242,11 +242,25 @@ lemma Confidentiality_Source_Message:
       | (Ex #x. Reveal_Journalist_Ephemeral_Key(j, je_pk) @ #x)
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)"
 
-lemma Confidentiality_Journalist_Message:
+lemma PFS_Source_Message:
+"All #t s j je_pk nr m. 
+        Source_Message_Sent(s, j, je_pk, nr, m) @ #t
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x & #x < #t)
+      | (Ex #x. Reveal_Journalist_Ephemeral_Key(j, je_pk) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
+
+lemma Secrecy_Journalist_Message:
 "All #t j s m. 
         Journalist_Message_Sent(j, s, m) @ #t
   ==>   (not Ex #x. K(m) @ #x)
       | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x)"
+
+lemma PFS_Journalist_Message:
+"All #t j s m. 
+        Journalist_Message_Sent(j, s, m) @ #t
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x & #x < #t)"
 
 lemma Non_Injective_Agreement:
 "All #t a b m. 
