@@ -221,7 +221,7 @@ rule Source_Recv [color=#6495ED]:
       k = hkdf(ss)
       m = <flag, msg, $J>
   in
-  [ In(<senc(m, k), me_pk, ss_encap>)
+  [ In(<senc(m, k), ss_encap>)
   , Source_Fetch($S, m_id)
   , !Ltk_Source_Encryption($S, s_sk) ]
   --[ Source_Read($S, msg)
