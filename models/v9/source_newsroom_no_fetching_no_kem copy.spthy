@@ -54,7 +54,8 @@ rule Journalist_Enrollment [color=#FF7F50]:
   in
   [ !Ltk_Newsroom($NR, nr_sk)
   , Fr(~j_sk)]
-  --[ Journalist_Verified($NR, $J) ]->
+  --[ Journalist_Verified($NR, $J)
+    , OnlyOnce($J) ]->
   [ Out(<j_pk, sig_j_pk>)
   , !Journalist_Enrolled($NR, $J)
   , !Ltk_Journalist_Signing($J, ~j_sk)
@@ -104,7 +105,7 @@ rule Source_Submit [derivchecks, color=#6495ED]:
     , Symmetric_Encryption_OUT(m, k)
     , Source_Submission($S, $J, $NR, ~msg)
     , Source_Message_Sent($S, $J, je_pk, $NR, ~msg)
-    , Sent($S, $J, m) ]->
+    , Sent($S, $NR, m) ]->
   [ Out(<c, me_pk>) ]
 
 rule Journalist_Recv [derivchecks, color=#6495ED]:
@@ -113,10 +114,11 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
   in
   [ In(<senc(m, k), me_pk>)
   , Journalist_Ephemeral_Key($J, je_sk)
-  , !Pk_Source_Encryption($S, s_pk) ]
+  , !Pk_Source_Encryption($S, s_pk) 
+  , !Journalist_Enrolled($NR, $J)]
   --[ Journalist_Read($J, msg)
     , Symmetric_Encryption_IN(m, k)
-    , Received($J, $S, m)
+    , Received($NR, $S, $J, m)
     , Eq(flag, 'msg') ]->
   [ Journalist_Recv($J, msg, s_pk) ]
 
@@ -179,6 +181,9 @@ restriction Eq:
 
 restriction Neq:
   "All x #t. Neq(x,x) @ #t ==> F"
+
+restriction OnlyOnce:
+  "All x #i #j. OnlyOnce(x)@#i & OnlyOnce(x)@#j ==> #i = #j"
 
 /* Without this Source-Lemma, Tamarin thinks that the "Fetch" Rules act as decryption oracles.
    This Source-Lemma ensures that if a party gets a ciphertext, either the adversary encrypted the message (i.e, it knew the message)
@@ -254,19 +259,20 @@ lemma PFS_Journalist_Message:
       | (Ex #x. Reveal_Source_Encryption_Key(s) @ #x & #x < #t)"
 
 lemma Non_Injective_Agreement:
-"All #t a b m. 
-        Received(b, a, m) @ #t
+"All #t a b c m. 
+        Received(b, a, c, m) @ #t
   ==>   (Ex #x. Sent(a, b, m) @ #x & #x < #t) 
       | (Ex #x. Reveal(a) @ #x)
-      | (Ex #x. Reveal(b) @ #x)"
+      | (Ex #x. Reveal(b) @ #x)
+      | (Ex #x. Reveal(c) @ #x)"
   
-lemma Injective_Agreement:
-"All #t a b m. 
-        Received(b, a, m) @ #t
-  ==>   (Ex #x. Sent(a, b, m) @ #x 
-              & #x < #t
-              & not (Ex a2 b2 #t2. Received(b2, a2, m) @ #t2 & not (#t2 = #t)))
-      | (Ex #x. Reveal(a) @ #x)
-      | (Ex #x. Reveal(b) @ #x)"
+// lemma Injective_Agreement:
+// "All #t a b m. 
+//         Received(b, a, m) @ #t
+//   ==>   (Ex #x. Sent(a, b, m) @ #x 
+//               & #x < #t
+//               & not (Ex a2 b2 #t2. Received(b2, a2, m) @ #t2 & not (#t2 = #t)))
+//       | (Ex #x. Reveal(a) @ #x)
+//       | (Ex #x. Reveal(b) @ #x)"
 
 end
