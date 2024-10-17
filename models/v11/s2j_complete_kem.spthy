@@ -35,7 +35,7 @@ rule Register_Source_Encryption_Key [color=#FDFD96]:
   in
   [ Fr(~ltk) ]
   --[ Register_Source($A, public_key) ]->
-  [ !Ltk_Source_Encryption($A, ~ltk), !Pk_Source_Encryption($A, public_key) ]
+  [ !Ltk_Source_Encryption($A, ~ltk), !Pk_Source_Encryption($A, public_key), Out(public_key) ]
 
 rule Reveal_Source_Encryption_Key [color=#FF6961]:
   let public_key = pk(ltk) 
@@ -43,11 +43,6 @@ rule Reveal_Source_Encryption_Key [color=#FF6961]:
   [ !Ltk_Source_Encryption(A, ltk) ]
   --[ Reveal_Source_Encryption_Key(A), Reveal_Source_Encryption_Key(public_key), Reveal_Longterm_Secret(A), Reveal(A), SomeCompromise() ]->
   [ Out(ltk) ]
-
-rule Reveal_Source_Encryption_Public_Key [color=#FF6961]:
-  [ !Pk_Source_Encryption(A, public_key) ]
-  --[ Reveal_Source_Encryption_Public_Key(A), Reveal_Source_Encryption_Public_Key(public_key), Reveal(A), SomeCompromise() ]->
-  [ Out(public_key) ]
 
 
 // Journalist Enrollment
