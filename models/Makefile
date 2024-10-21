@@ -8,6 +8,8 @@ USER:=$(shell whoami)
 run:
 	@tamarin-prover-release +RTS -N$(N_THREADS) -RTS interactive "$(DIR)" --port=$(PORT)
 
+# proves all lemmas with "Auto" prefix and stores theory in DIR/theories
+# make download DIR="path/to/model" FILE="theory.spthy"
 download:
 	@if [ ! -d "./$(DIR)/theories" ]; then \
 		mkdir "./$(DIR)/theories"; \
@@ -19,6 +21,8 @@ download:
 run_local:
 	@tamarin-prover +RTS -N$(N_THREADS) -RTS interactive "$(DIR)"
 
+# proves all lemmas with "Auto" prefix and stores theory in DIR/theories
+# make download_local DIR="path/to/model" FILE="theory.spthy"
 download_local:
 	@if [ ! -d "./$(DIR)/theories" ]; then \
 		mkdir "./$(DIR)/theories"; \
