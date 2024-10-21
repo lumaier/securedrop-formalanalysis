@@ -29,11 +29,6 @@ download_local:
 	fi
 	@tamarin-prover +RTS -N$(N_THREADS) -RTS --Output="./$(DIR)/theories" --prove "$(DIR)/$(FILE)"
 
-# runs the tamarin-prover with the "auto-sources" flag which tries to automatically generate source lemmas
-# to remove partial deconstructions
-run_auto:
-	@tamarin-prover-release +RTS -N$(N_THREADS) -RTS interactive "$(DIR)" --port=$(PORT) --auto-sources
-
 # cleans up the graph images from interactive mode
 # (necessary to prevent disk space issues)
 clean:
