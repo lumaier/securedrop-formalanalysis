@@ -1,0 +1,838 @@
+theory SecureDrop begin
+
+// Function signature and definition of the equational theory E
+
+functions: adec/2, aenc/2, fst/1, hkdf/1, pair/2, pk/1, sign/2, snd/1,
+           true/0, verify/3
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+
+
+
+
+
+
+
+
+rule (modulo E) Register_Newsroom_Key[color=#fdfd96]:
+   [ Fr( ~ltk ) ]
+  -->
+   [
+   !Ltk_Newsroom( $A, ~ltk ), !Pk_Newsroom( $A, pk(~ltk) ), Out( pk(~ltk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Newsroom_Key[color=#ff6961]:
+   [ !Ltk_Newsroom( A, ltk ) ]
+  --[ Reveal_Newsroom_Key( A ), Reveal( A ), SomeCompromise( ) ]->
+   [ Out( ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Register_Source_Encryption_Key[color=#fdfd96]:
+   [ Fr( ~ltk ) ]
+  --[ Register_Source( pk(~ltk) ) ]->
+   [
+   !Ltk_Source_Encryption( $A, ~ltk ),
+   !Pk_Source_Encryption( $A, pk(~ltk) ), Out( pk(~ltk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Source_Encryption_Key[color=#ff6961]:
+   [ !Ltk_Source_Encryption( A, ltk ) ]
+  --[
+  Reveal_Source_Encryption_Key( A ),
+  Reveal_Source_Encryption_Key( pk(ltk) ), Reveal_Longterm_Secret( A ),
+  Reveal( A ), SomeCompromise( )
+  ]->
+   [ Out( ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Journalist_Enrollment[color=#ff7f50]:
+   [ !Ltk_Newsroom( $NR, nr_sk ), Fr( ~j_sk ) ]
+  --[ Journalist_Verified( $NR, $J ), OnlyOnce( $J ) ]->
+   [
+   Out( <pk(~j_sk), sign(<'signing', pk(~j_sk)>, nr_sk)> ),
+   !Journalist_Enrolled( $NR, $J ), !Ltk_Journalist_Signing( $J, ~j_sk ),
+   !Pk_Journalist_Signing( $J, pk(~j_sk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_Signing_Key[color=#ff6961]:
+   [ !Ltk_Journalist_Signing( A, ltk ) ]
+  --[
+  Reveal_Journalist_Signing_Key( A ),
+  Reveal_Journalist_Signing_Key( pk(ltk) ), Reveal_Longterm_Secret( A ),
+  Reveal( A ), SomeCompromise( )
+  ]->
+   [ Out( ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Journalist_Register_Ephemeral_Key[color=#ff7f50]:
+   [ !Ltk_Journalist_Signing( $J, j_sk ), Fr( ~je_sk ) ]
+  -->
+   [
+   Out( <pk(~je_sk), sign(<'ephemeral', pk(~je_sk)>, j_sk)> ),
+   !Journalist_Ephemeral_Key( $J, ~je_sk ),
+   Journalist_Ephemeral_Key_Reveal( $J, ~je_sk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_Ephemeral_Key[color=#ff6961]:
+   [ Journalist_Ephemeral_Key_Reveal( J, je_sk ) ]
+  --[
+  Reveal_Journalist_Ephemeral_Key( pk(je_sk) ), Reveal( J ),
+  SomeCompromise( )
+  ]->
+   [ Out( je_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Source_Send[color=#6495ed]:
+   [
+   !Ltk_Source_Encryption( $S, s_sk ), !Pk_Newsroom( $NR, nr_pk ),
+   !Pk_Journalist_Signing( $J, j_pk ),
+   In( <j_pk, sig_j_pk, je_pk, sig_je_pk> ), Fr( ~msg )
+   ]
+  --[
+  Eq( verify(sig_j_pk, <'signing', j_pk>, nr_pk), true ),
+  Eq( verify(sig_je_pk, <'ephemeral', je_pk>, j_pk), true ),
+  Source_Sent( pk(s_sk), $J, je_pk, $NR,
+               <'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR, 
+                sign(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR>, s_sk)>
+  )
+  ]->
+   [
+   Out( aenc(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR, 
+              sign(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR>, s_sk)>,
+             je_pk)
+   )
+   ]
+
+  /*
+  rule (modulo AC) Source_Send[color=#6495ed]:
+     [
+     !Ltk_Source_Encryption( $S, s_sk ), !Pk_Newsroom( $NR, nr_pk ),
+     !Pk_Journalist_Signing( $J, j_pk ),
+     In( <j_pk, sig_j_pk, je_pk, sig_je_pk> ), Fr( ~msg )
+     ]
+    --[
+    Eq( z, true ), Eq( z.1, true ),
+    Source_Sent( pk(s_sk), $J, je_pk, $NR,
+                 <'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR, 
+                  sign(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR>, s_sk)>
+    )
+    ]->
+     [
+     Out( aenc(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR, 
+                sign(<'msg_s2j', ~msg, pk(s_sk), je_pk, $J, $NR>, s_sk)>,
+               je_pk)
+     )
+     ]
+    variants (modulo AC)
+    1. j_pk  = j_pk.15
+       je_pk = je_pk.16
+       nr_pk = nr_pk.17
+       sig_j_pk
+             = sig_j_pk.19
+       sig_je_pk
+             = sig_je_pk.20
+       z     = verify(sig_j_pk.19, <'signing', j_pk.15>, nr_pk.17)
+       z.1   = verify(sig_je_pk.20, <'ephemeral', je_pk.16>, j_pk.15)
+    
+    2. j_pk  = j_pk.18
+       je_pk = je_pk.19
+       nr_pk = pk(x.29)
+       sig_j_pk
+             = sign(<'signing', j_pk.18>, x.29)
+       sig_je_pk
+             = sig_je_pk.23
+       z     = true
+       z.1   = verify(sig_je_pk.23, <'ephemeral', je_pk.19>, j_pk.18)
+    
+    3. j_pk  = pk(x.25)
+       je_pk = je_pk.17
+       nr_pk = nr_pk.18
+       sig_j_pk
+             = sig_j_pk.20
+       sig_je_pk
+             = sign(<'ephemeral', je_pk.17>, x.25)
+       z     = verify(sig_j_pk.20, <'signing', pk(x.25)>, nr_pk.18)
+       z.1   = true
+    
+    4. j_pk  = pk(x.25)
+       je_pk = je_pk.17
+       nr_pk = pk(x.27)
+       sig_j_pk
+             = sign(<'signing', pk(x.25)>, x.27)
+       sig_je_pk
+             = sign(<'ephemeral', je_pk.17>, x.25)
+       z     = true
+       z.1   = true
+  */
+
+rule (modulo E) Journalist_Recv[color=#6495ed]:
+   [
+   In( aenc(<'msg_s2j', msg, s_pk, pk(je_sk), $J, $NR, sig_m>, pk(je_sk)) ),
+   !Journalist_Ephemeral_Key( $J, je_sk ), !Journalist_Enrolled( $NR, $J )
+   ]
+  --[
+  OnlyOnce( <$J, je_sk> ),
+  Eq( verify(sig_m, <'msg_s2j', msg, s_pk, pk(je_sk), $J, $NR>, s_pk), true
+  ),
+  Journalist_Received( $J, pk(je_sk), $NR, s_pk,
+                       <'msg_s2j', msg, s_pk, pk(je_sk), $J, $NR, sig_m>
+  )
+  ]->
+   [ Journalist_Recv( $J, $NR, s_pk, msg ) ]
+
+  /*
+  rule (modulo AC) Journalist_Recv[color=#6495ed]:
+     [
+     In( aenc(<'msg_s2j', msg, s_pk, pk(je_sk), $J, $NR, sig_m>, pk(je_sk)) ),
+     !Journalist_Ephemeral_Key( $J, je_sk ), !Journalist_Enrolled( $NR, $J )
+     ]
+    --[
+    OnlyOnce( <$J, je_sk> ), Eq( z, true ),
+    Journalist_Received( $J, pk(je_sk), $NR, s_pk,
+                         <'msg_s2j', msg, s_pk, pk(je_sk), $J, $NR, sig_m>
+    )
+    ]->
+     [ Journalist_Recv( $J, $NR, s_pk, msg ) ]
+    variants (modulo AC)
+    1. $J    = $J.10
+       $NR   = $NR.11
+       je_sk = je_sk.12
+       msg   = msg.13
+       s_pk  = s_pk.14
+       sig_m = sig_m.15
+       z     = verify(sig_m.15,
+                      <'msg_s2j', msg.13, s_pk.14, pk(je_sk.12), $J.10, $NR.11>, s_pk.14)
+    
+    2. $J    = $J.14
+       $NR   = $NR.15
+       je_sk = je_sk.16
+       msg   = msg.17
+       s_pk  = pk(x.26)
+       sig_m = sign(<'msg_s2j', msg.17, pk(x.26), pk(je_sk.16), $J.14, $NR.15>,
+                    x.26)
+       z     = true
+  */
+
+rule (modulo E) Journalist_Send[color=#6495ed]:
+   [
+   Journalist_Recv( $J, $NR, s_pk, msg_old ),
+   !Ltk_Journalist_Signing( $J, j_sk ), Fr( ~msg )
+   ]
+  --[
+  Journalist_Sent( $J, s_pk,
+                   <'msg_j2s', ~msg, pk(j_sk), s_pk, 
+                    sign(<'msg_j2s', ~msg, pk(j_sk), s_pk>, j_sk)>
+  )
+  ]->
+   [
+   Out( aenc(<'msg_j2s', ~msg, pk(j_sk), s_pk, 
+              sign(<'msg_j2s', ~msg, pk(j_sk), s_pk>, j_sk)>,
+             s_pk)
+   )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Source_Recv[color=#6495ed]:
+   [
+   In( aenc(<'msg_j2s', msg, j_pk, pk(s_sk), sig_m>, pk(s_sk)) ),
+   !Ltk_Source_Encryption( $S, s_sk ), !Pk_Journalist_Signing( $J, j_pk )
+   ]
+  --[
+  Eq( verify(sig_m, <'msg_j2s', msg, j_pk, pk(s_sk)>, j_pk), true ),
+  Source_Received( pk(s_sk), $J, <'msg_j2s', msg, j_pk, pk(s_sk), sig_m> )
+  ]->
+   [ Source_Recv( $S, msg, j_pk ) ]
+
+  /*
+  rule (modulo AC) Source_Recv[color=#6495ed]:
+     [
+     In( aenc(<'msg_j2s', msg, j_pk, pk(s_sk), sig_m>, pk(s_sk)) ),
+     !Ltk_Source_Encryption( $S, s_sk ), !Pk_Journalist_Signing( $J, j_pk )
+     ]
+    --[
+    Eq( z, true ),
+    Source_Received( pk(s_sk), $J, <'msg_j2s', msg, j_pk, pk(s_sk), sig_m> )
+    ]->
+     [ Source_Recv( $S, msg, j_pk ) ]
+    variants (modulo AC)
+    1. j_pk  = j_pk.10
+       msg   = msg.11
+       s_sk  = s_sk.12
+       sig_m = sig_m.13
+       z     = verify(sig_m.13, <'msg_j2s', msg.11, j_pk.10, pk(s_sk.12)>,
+                      j_pk.10)
+    
+    2. j_pk  = pk(x.17)
+       msg   = msg.12
+       s_sk  = s_sk.13
+       sig_m = sign(<'msg_j2s', msg.12, pk(x.17), pk(s_sk.13)>, x.17)
+       z     = true
+  */
+
+restriction Eq:
+  "∀ t1 t2 #x. (Eq( t1, t2 ) @ #x) ⇒ (t1 = t2)"
+  // safety formula
+
+restriction OnlyOnce:
+  "∀ x #i #j. ((OnlyOnce( x ) @ #i) ∧ (OnlyOnce( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+lemma Auto_Executability_Submission:
+  exists-trace
+  "∃ #t1 #t2 s_pk j je_pk nr m.
+    ((Source_Sent( s_pk, j, je_pk, nr, m ) @ #t1) ∧
+     (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t2)) ∧
+    (¬(∃ #x. SomeCompromise( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 s_pk j je_pk nr m.
+  (Source_Sent( s_pk, j, je_pk, nr, m ) @ #t1) ∧
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t2)
+ ∧
+  ∀ #x. (SomeCompromise( ) @ #x) ⇒ ⊥"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₀ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t1 )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, pk(x) ) ▶₂ #t1 )
+      case Journalist_Enrollment
+      solve( !Journalist_Ephemeral_Key( $J, je_sk ) ▶₁ #t2 )
+        case Journalist_Register_Ephemeral_Key
+        solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t2 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.1) ) @ #vk.3 )
+            case Journalist_Enrollment
+            solve( !KU( sign(<'ephemeral', pk(~je_sk)>, ~j_sk) ) @ #vk.6 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( aenc(<'msg_s2j', ~msg, pk(~ltk), pk(~je_sk), $J, $NR, 
+                                sign(<'msg_s2j', ~msg, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                               pk(~je_sk))
+                     ) @ #vk.7 )
+                case Source_Send
+                solve( !KU( pk(~j_sk) ) @ #vk.6 )
+                  case Journalist_Enrollment
+                  solve( !KU( pk(~je_sk) ) @ #vk.7 )
+                    case Journalist_Register_Ephemeral_Key
+                    SOLVED // trace found
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Executability_Journalist_Response:
+  exists-trace
+  "∃ #t1 #t2 s_pk j_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Source_Received( s_pk, j_pk, m ) @ #t2)) ∧
+    (¬(∃ #x. SomeCompromise( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 s_pk j_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Source_Received( s_pk, j_pk, m ) @ #t2)
+ ∧
+  ∀ #x. (SomeCompromise( ) @ #x) ⇒ ⊥"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, pk(s_sk), msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₁ #t2 )
+      case Register_Source_Encryption_Key
+      solve( !Pk_Journalist_Signing( $J, pk(~j_sk) ) ▶₂ #t2 )
+        case Journalist_Enrollment
+        solve( !KU( aenc(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR, 
+                          sign(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                         pk(~je_sk))
+               ) @ #vk.1 )
+          case Source_Send
+          solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.2) ) @ #vk.5 )
+            case Journalist_Enrollment
+            solve( !KU( sign(<'ephemeral', pk(~je_sk)>, ~j_sk) ) @ #vk.8 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( aenc(<'msg_j2s', ~msg.1, pk(~j_sk), pk(~ltk), 
+                                sign(<'msg_j2s', ~msg.1, pk(~j_sk), pk(~ltk)>, ~j_sk)>,
+                               pk(~ltk))
+                     ) @ #vk.4 )
+                case Journalist_Send
+                solve( !KU( pk(~j_sk) ) @ #vk.7 )
+                  case Journalist_Enrollment
+                  solve( !KU( pk(~je_sk) ) @ #vk.8 )
+                    case Journalist_Register_Ephemeral_Key
+                    SOLVED // trace found
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Secrecy_Source_Message:
+  all-traces
+  "∀ #t s j je_pk nr m.
+    (Source_Sent( s, j, je_pk, nr, m ) @ #t) ⇒
+    ((((¬(∃ #x. K( m ) @ #x)) ∨
+       (∃ #x. Reveal_Journalist_Signing_Key( j ) @ #x)) ∨
+      (∃ #x. Reveal_Newsroom_Key( nr ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t s j je_pk nr m.
+  (Source_Sent( s, j, je_pk, nr, m ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₀ #t )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, pk(x) ) ▶₂ #t )
+      case Journalist_Enrollment
+      solve( !KU( ~msg ) @ #vk.12 )
+        case Source_Send
+        solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.1) ) @ #vk.4 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'ephemeral', pk(x)>, ~j_sk) ) @ #vk.11 )
+            case Journalist_Register_Ephemeral_Key
+            solve( !KU( ~je_sk ) @ #vk.19 )
+              case Reveal_Journalist_Ephemeral_Key
+              by contradiction /* from formulas */
+            qed
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.21 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~ltk.1 ) @ #vk.21 )
+            case Reveal_Newsroom_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_PFS_Source_Message:
+  all-traces
+  "∀ #t s j je_pk nr m.
+    (Source_Sent( s, j, je_pk, nr, m ) @ #t) ⇒
+    ((((¬(∃ #x. K( m ) @ #x)) ∨
+       (∃ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ∧ (#x < #t))) ∨
+      (∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t))) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t s j je_pk nr m.
+  (Source_Sent( s, j, je_pk, nr, m ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₀ #t )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, pk(x) ) ▶₂ #t )
+      case Journalist_Enrollment
+      solve( !KU( ~msg ) @ #vk.12 )
+        case Source_Send
+        solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.1) ) @ #vk.4 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'ephemeral', pk(x)>, ~j_sk) ) @ #vk.11 )
+            case Journalist_Register_Ephemeral_Key
+            solve( !KU( ~je_sk ) @ #vk.19 )
+              case Reveal_Journalist_Ephemeral_Key
+              by contradiction /* from formulas */
+            qed
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.21 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~ltk.1 ) @ #vk.21 )
+            case Reveal_Newsroom_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Secrecy_Journalist_Message:
+  all-traces
+  "∀ #t1 #t2 j_pk s_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((¬(∃ #x. K( m ) @ #x)) ∨
+     (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j_pk s_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, pk(~ltk), msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( ~msg ) @ #vk.3 )
+      case Journalist_Send
+      solve( !KU( ~ltk ) @ #vk.10 )
+        case Reveal_Source_Encryption_Key
+        by contradiction /* from formulas */
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_PFS_Journalist_Message:
+  all-traces
+  "∀ #t1 #t2 j_pk s_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((¬(∃ #x. K( m ) @ #x)) ∨
+     (∃ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ∧ (#x < #t1)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j_pk s_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ¬(#x < #t1))"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, pk(~ltk), msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( ~msg ) @ #vk.3 )
+      case Journalist_Send
+      solve( !KU( ~ltk ) @ #vk.10 )
+        case Reveal_Source_Encryption_Key
+        solve( !KU( aenc(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR, 
+                          sign(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                         pk(~je_sk))
+               ) @ #vk.10 )
+          case Source_Send
+          solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.2) ) @ #vk.13 )
+            case Journalist_Enrollment
+            solve( !KU( sign(<'msg_j2s', ~msg.1, pk(~j_sk), pk(~ltk)>, ~j_sk)
+                   ) @ #vk.12 )
+              case Journalist_Send
+              solve( !KU( sign(<'ephemeral', pk(~je_sk)>, ~j_sk) ) @ #vk.16 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !KU( pk(~j_sk) ) @ #vk.13 )
+                  case Journalist_Enrollment
+                  solve( !KU( pk(~ltk) ) @ #vk.15 )
+                    case Register_Source_Encryption_Key
+                    solve( !KU( pk(~je_sk) ) @ #vk.16 )
+                      case Journalist_Register_Ephemeral_Key
+                      SOLVED // trace found
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Non_Injective_Agreement_Source_Message:
+  all-traces
+  "∀ #t1 #t2 j je_pk nr s_pk m.
+    ((Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    (((∃ #x. (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x) ∧ (#x < #t1)) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j je_pk nr s_pk m.
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∀ #x. (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x) ⇒ ¬(#x < #t1)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Journalist_Ephemeral_Key( $J, je_sk ) ▶₁ #t1 )
+  case Journalist_Register_Ephemeral_Key
+  solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( aenc(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR, 
+                      sign(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                     pk(~je_sk))
+           ) @ #vk )
+      case Source_Send
+      by contradiction /* from formulas */
+    next
+      case c_aenc
+      solve( !KU( sign(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)
+             ) @ #vk.13 )
+        case Source_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~ltk ) @ #vk.19 )
+          case Reveal_Source_Encryption_Key
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Injective_Agreement_Source_Message:
+  all-traces
+  "∀ #t1 #t2 j je_pk nr s_pk m.
+    ((Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    (((∃ #x1.
+        ((Source_Sent( s_pk, j, je_pk, nr, m ) @ #x1) ∧ (#x1 < #t1)) ∧
+        (¬(∃ j_2 je_pk_2 nr_2 s_pk_2 #x2.
+            (Journalist_Received( j_2, je_pk_2, nr_2, s_pk_2, m ) @ #x2) ∧
+            (¬(#x2 = #t1))))) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j je_pk nr s_pk m.
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∀ #x1.
+    (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x1)
+   ⇒
+    ((¬(#x1 < #t1)) ∨
+     (∃ j_2 je_pk_2 nr_2 s_pk_2 #x2.
+       (Journalist_Received( j_2, je_pk_2, nr_2, s_pk_2, m ) @ #x2)
+      ∧
+       ¬(#x2 = #t1)))) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Journalist_Ephemeral_Key( $J, je_sk ) ▶₁ #t1 )
+  case Journalist_Register_Ephemeral_Key
+  solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( aenc(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR, 
+                      sign(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                     pk(~je_sk))
+           ) @ #vk )
+      case Source_Send
+      by contradiction /* from formulas */
+    next
+      case c_aenc
+      solve( !KU( sign(<'msg_s2j', msg, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)
+             ) @ #vk.13 )
+        case Source_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~ltk ) @ #vk.19 )
+          case Reveal_Source_Encryption_Key
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Non_Injective_Agreement_Journalist_Message:
+  all-traces
+  "∀ #t1 j_pk s_pk m.
+    (Source_Received( s_pk, j_pk, m ) @ #t1) ⇒
+    (((∃ #x. (Journalist_Sent( j_pk, s_pk, m ) @ #x) ∧ (#x < #t1)) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Signing_Key( j_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 j_pk s_pk m.
+  (Source_Received( s_pk, j_pk, m ) @ #t1)
+ ∧
+  (∀ #x. (Journalist_Sent( j_pk, s_pk, m ) @ #x) ⇒ ¬(#x < #t1)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₁ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Journalist_Signing( $J, pk(x) ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( aenc(<'msg_j2s', msg, pk(~j_sk), pk(~ltk), 
+                      sign(<'msg_j2s', msg, pk(~j_sk), pk(~ltk)>, ~j_sk)>,
+                     pk(~ltk))
+           ) @ #vk )
+      case Journalist_Send
+      by contradiction /* from formulas */
+    next
+      case c_aenc
+      solve( !KU( sign(<'msg_j2s', msg, pk(~j_sk), pk(~ltk)>, ~j_sk)
+             ) @ #vk.9 )
+        case Journalist_Send
+        by contradiction /* from formulas */
+      next
+        case c_sign
+        solve( !KU( ~j_sk ) @ #vk.13 )
+          case Reveal_Journalist_Signing_Key
+          by contradiction /* from formulas */
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Injective_Agreement_Journalist_Message:
+  all-traces
+  "∀ #t1 j_pk s_pk m.
+    (Source_Received( s_pk, j_pk, m ) @ #t1) ⇒
+    (((∃ #x1.
+        ((Journalist_Sent( j_pk, s_pk, m ) @ #x1) ∧ (#x1 < #t1)) ∧
+        (¬(∃ j_pk_2 s_pk_2 #x2.
+            (Source_Received( s_pk_2, j_pk_2, m ) @ #x2) ∧ (¬(#x2 = #t1))))) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Signing_Key( j_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 j_pk s_pk m.
+  (Source_Received( s_pk, j_pk, m ) @ #t1)
+ ∧
+  (∀ #x1.
+    (Journalist_Sent( j_pk, s_pk, m ) @ #x1)
+   ⇒
+    ((¬(#x1 < #t1)) ∨
+     (∃ j_pk_2 s_pk_2 #x2.
+       (Source_Received( s_pk_2, j_pk_2, m ) @ #x2) ∧ ¬(#x2 = #t1)))) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, s_sk ) ▶₁ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Journalist_Signing( $J, pk(x) ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( aenc(<'msg_j2s', msg, pk(~j_sk), pk(~ltk), 
+                      sign(<'msg_j2s', msg, pk(~j_sk), pk(~ltk)>, ~j_sk)>,
+                     pk(~ltk))
+           ) @ #vk )
+      case Journalist_Send
+      solve( (#x2 < #t1)  ∥ (#t1 < #x2) )
+        case case_1
+        solve( !Ltk_Source_Encryption( $S.1, ~ltk ) ▶₁ #x2 )
+          case Register_Source_Encryption_Key
+          solve( !Pk_Journalist_Signing( $J.1, pk(~j_sk) ) ▶₂ #x2 )
+            case Journalist_Enrollment
+            solve( !KU( aenc(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR, 
+                              sign(<'msg_s2j', msg_old, pk(~ltk), pk(~je_sk), $J, $NR>, ~ltk)>,
+                             pk(~je_sk))
+                   ) @ #vk.1 )
+              case Source_Send
+              solve( !KU( sign(<'signing', pk(~j_sk)>, ~ltk.2) ) @ #vk.5 )
+                case Journalist_Enrollment
+                solve( !KU( sign(<'ephemeral', pk(~je_sk)>, ~j_sk) ) @ #vk.8 )
+                  case Journalist_Register_Ephemeral_Key
+                  solve( !KU( pk(~j_sk) ) @ #vk.6 )
+                    case Journalist_Enrollment
+                    solve( !KU( pk(~je_sk) ) @ #vk.8 )
+                      case Journalist_Register_Ephemeral_Key
+                      SOLVED // trace found
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.8.0
+Maude version 3.1
+Git revision: f172d7f00b1485446a1e7a42dc14623c2189cc42, branch: master
+Compiled at: 2023-08-31 10:43:56.765388839 UTC
+*/
+
+end
