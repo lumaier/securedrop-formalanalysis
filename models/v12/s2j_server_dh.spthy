@@ -119,7 +119,7 @@ rule Reveal_Journalist_Ephemeral_Key [color=#FF6961]:
 rule Source_Send [color=#6495ED]:
   let s_pk = 'g'^s_sk
       k = je_pk^~me_sk
-      m = <'msg_s2j', ~msg, s_pk>
+      m = <'msg_s2j', ~msg, s_pk, $NR>
       c = senc(m, k)
       me_pk = ('g'^~me_sk)
   in
@@ -145,7 +145,7 @@ rule Source_Send [color=#6495ED]:
 
 rule Journalist_Recv [color=#6495ED]:
   let k = me_pk^je_sk
-      m = <'msg_s2j', msg, s_pk>
+      m = <'msg_s2j', msg, s_pk, $NR>
       je_pk = 'g'^je_sk
   in
   [ In_S($J, s_pk, <senc(m, k), me_pk>)
