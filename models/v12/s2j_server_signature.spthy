@@ -18,6 +18,18 @@ Color semantics:
 
  */
 
+// Channel Rules
+
+rule ChanOut_S:
+  [ Out_S(A,B,x) ]
+  -->
+  [ !Sec(A,B,x) ]
+
+rule ChanIn_S:
+  [ !Sec(A,B,x) ]
+  --[ OnlyOnce(<A,B,x>) ]-> // assuming the secure channel provides replay protection
+  [ In_S(B,A,x) ]
+
 // Key Registration
 
 rule Register_Newsroom_Key [color=#FDFD96]:
@@ -123,13 +135,13 @@ rule Source_Send [color=#6495ED]:
       // Actions for Lemmas
     , Source_Sent(s_pk, $J, je_pk, $NR, m)
     ]->
-  [ Out(c) ]
+  [ Out_S(s_pk, $J, c) ]
 
 rule Journalist_Recv [color=#6495ED]:
   let je_pk = pk(je_sk)
       m = <'msg_s2j', msg, s_pk, je_pk, $J, $NR, sig_m>
   in
-  [ In(aenc(m, pk(je_sk)))
+  [ In_S($J, s_pk, aenc(m, pk(je_sk)))
   , !Journalist_Ephemeral_Key($J, je_sk)
   , !Journalist_Enrolled($NR, $J)]
   --[ OnlyOnce(<$J, je_sk>)
@@ -150,13 +162,13 @@ rule Journalist_Send [color=#6495ED]:
   --[ // Actions for Lemmas
       Journalist_Sent($J, s_pk, m)
     ]->
-  [ Out(c) ]
+  [ Out_S($J, s_pk, c) ]
 
 rule Source_Recv [color=#6495ED]:
   let s_pk = pk(s_sk)
       m = <'msg_j2s', msg, j_pk, s_pk, sig_m>
   in
-  [ In(aenc(m, pk(s_sk)))
+  [ In_S(s_pk, $J, aenc(m, pk(s_sk)))
   , !Ltk_Source_Encryption($S, s_sk)
   , !Pk_Journalist_Signing($J, j_pk) ]
   --[ // Actions for Lemmas
