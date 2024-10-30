@@ -29,10 +29,33 @@ match = None
 if argv[1] in ['Auto_Secrecy_Source_Message']:
   match = matchAgainstList([
     '!KU( ~msg',
-    re.compile(r'Server_In\(.+, (msg_s2j|msg_j2s)'),
+    re.compile(r'Server_In\(.+msg_s2j'),
     '!KU( sign(<\'ephemeral',
-    '!KU( sign(<\'signing',
+    re.compile(r'!KU\( ~je?_sk')
+  ], lines)
+elif argv[1] in ['Auto_PFS_Source_Message']:
+  match = matchAgainstList([
+    '!KU( ~msg',
     re.compile(r'!KU\( ~je?_sk'),
+    '!KU( ~ltk',
+    re.compile(r'Server_In\(.+msg_s2j'),
+    '!KU( sign(<\'msg_s2j',
+    '!KU( sign(<\'signing',
+    '!KU( sign(<\'ephemeral'
+  ], lines)
+elif argv[1] in ['Auto_Secrecy_Journalist_Message']:
+  match = matchAgainstList([
+    '!KU( ~msg',
+    re.compile(r'Server_In\(.+msg_s2j'),
+    '!KU( ~ltk'
+  ], lines)
+elif argv[1] in ['Auto_Non_Injective_Agreement_Source_Message']:
+  match = matchAgainstList([
+    re.compile(r'Client_In\(.+msg_s2j'),
+    re.compile(r'Server_In\(.+msg_s2j'),
+    re.compile(r'!KU\( aenc.+msg_s2j'),
+    re.compile(r'!KU\( sign.+msg_s2j'),
+    '!KU( ~ltk'
   ], lines)
 
 if match is not None:
