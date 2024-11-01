@@ -29,61 +29,67 @@ rule Register_Newsroom_Key [color=#FDFD96]:
   , Out(public_key) ]
 
 rule Reveal_Newsroom_Key [color=#FF6961]:
-  [ !Ltk_Newsroom(A, ltk) ]
+  [ !Ltk_Newsroom(A, ~ltk) ]
   --[ Reveal_Newsroom_Key(A)
     , Reveal(A)
     , SomeCompromise() ]->
-  [ Out(ltk) ]
+  [ Out(~ltk) ]
 
 rule Register_Source_Encryption_Key [color=#FDFD96]:
-  let public_key = 'g'^~ltk in
+  let s_dh_pk = 'g'^~ltk 
+      s_ae_pk = pk(~ltk)
+  in
   [ Fr(~ltk) ]
-  --[ Register_Source(public_key) ]->
+  --[ Register_Source(s_dh_pk) ]->
   [ !Ltk_Source_Encryption($A, ~ltk)
-  , !Pk_Source_Encryption($A, public_key)
-  , Out(public_key) ]
+  , Out(<s_dh_pk, s_ae_pk>) ]
 
 rule Reveal_Source_Encryption_Key [color=#FF6961]:
-  let public_key = 'g'^ltk in
-  [ !Ltk_Source_Encryption(A, ltk) ]
+  let s_dh_pk = 'g'^~ltk 
+      s_ae_pk = pk(~ltk)
+  in
+  [ !Ltk_Source_Encryption(A, ~ltk) ]
   --[ Reveal_Source_Encryption_Key(A)
-    , Reveal_Source_Encryption_Key(public_key)
+    , Reveal_Source_Encryption_Key(s_dh_pk)
     , Reveal_Longterm_Secret(A)
     , Reveal(A)
     , SomeCompromise() ]->
-  [ Out(ltk) ]
+  [ Out(~ltk) ]
 
 
 // Journalist Enrollment
 
 rule Journalist_Enrollment [color=#FF7F50]:
-  let j_pk = pk(~j_sk)
-      sig_j_pk = sign(<'signature', j_pk>, nr_sk)
+  let j_ae_pk = pk(~j_sk)
+      j_dh_pk = 'g'^~j_sk
+      sig_j_pk = sign(<'signature', <j_dh_pk, j_ae_pk>>, ~nr_sk)
   in
-  [ !Ltk_Newsroom($NR, nr_sk)
+  [ !Ltk_Newsroom($NR, ~nr_sk)
   , Fr(~j_sk)]
   --[ Journalist_Verified($NR, $J)
     , OnlyOnce($J) ]->
-  [ Out(<j_pk, sig_j_pk>)
+  [ Out(<<j_dh_pk, j_ae_pk>, sig_j_pk>)
   , !Journalist_Enrolled($NR, $J)
   , !Ltk_Journalist_Signing($J, ~j_sk)
-  , !Pk_Journalist_Signing_DH($J, 'g'^~j_sk)
-  , !Pk_Journalist_Signing($J, j_pk) ]
+  , !Pk_Journalist_Signing($J, <j_dh_pk, j_ae_pk>) ]
 
 rule Reveal_Journalist_Signing_Key [color=#FF6961]:
-  [ !Ltk_Journalist_Signing(A, ltk) ]
+  let j_dh_pk = 'g'^~ltk
+  in
+  [ !Ltk_Journalist_Signing(A, ~ltk) ]
   --[ Reveal_Journalist_Signing_Key(A)
+    , Reveal_Journalist_Signing_Key(j_dh_pk)
     , Reveal_Longterm_Secret(A)
     , Reveal(A)
     , SomeCompromise() ]->
-  [ Out(ltk) ]
+  [ Out(~ltk) ]
 
 rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   let je_dh_pk = 'g'^~je_sk
       je_ae_pk = pk(~je_sk)
-      sig_je_pk = sign(<'ephemeral', <je_dh_pk, je_ae_pk>>, j_sk)
+      sig_je_pk = sign(<'ephemeral', <je_dh_pk, je_ae_pk>>, ~j_sk)
   in
-  [ !Ltk_Journalist_Signing($J, j_sk)
+  [ !Ltk_Journalist_Signing($J, ~j_sk)
   , Fr(~je_sk) ]
   -->
   [ Out(<<je_dh_pk, je_ae_pk>,  sig_je_pk>)
@@ -91,88 +97,95 @@ rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   , Journalist_Ephemeral_Key_Reveal($J, ~je_sk) ]
 
 rule Reveal_Journalist_Ephemeral_Key [color=#FF6961]:
-  [ Journalist_Ephemeral_Key_Reveal(J, je_sk) ]
-  --[ Reveal_Journalist_Ephemeral_Key('g'^je_sk)
-    , Reveal_Journalist_Ephemeral_Key(pk(je_sk))
+  let je_dh_pk = 'g'^~je_sk
+      je_ae_pk = pk(~je_sk)
+  in
+  [ Journalist_Ephemeral_Key_Reveal(J, ~je_sk) ]
+  --[ Reveal_Journalist_Ephemeral_Key(<je_dh_pk, je_ae_pk>)
     , Reveal(J)
     , SomeCompromise() ]->
-  [ Out(je_sk) ]
+  [ Out(~je_sk) ]
 
 // Messaging and Fetching Protocol
 
 rule Source_Send [color=#6495ED]:
-  let s_pk = 'g'^s_sk
+  let s_dh_pk = 'g'^~s_sk
+      s_ae_pk = pk(~s_sk)
       me_pk = 'g'^~me_sk
-      k = hkdf(<je_dh_pk^s_sk, je_dh_pk^~me_sk>)
-      m = <'msg_s2j', ~msg>
-      enc_gs = aenc(<'s_pk', s_pk, me_pk>, je_ae_pk)
+      k = hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>)
+      m = <'msg_s2j', ~msg, s_dh_pk, s_ae_pk, $J, $NR>
+      enc_gs = aenc(<'s_pk', s_dh_pk, me_pk>, je_ae_pk)
       c = senc(m, k)
   in
-  [ !Ltk_Source_Encryption($S, s_sk)
+  [ !Ltk_Source_Encryption($S, ~s_sk)
   , !Pk_Newsroom($NR, nr_pk)
-  , !Pk_Journalist_Signing($J, j_pk)
-  , In(<j_pk, sig_j_pk, <je_dh_pk, je_ae_pk>, sig_je_pk>)
+  , !Pk_Journalist_Signing($J, <j_dh_pk, j_ae_pk>)
+  , In(<<j_dh_pk, j_ae_pk>, sig_j_pk, <je_dh_pk, je_ae_pk>, sig_je_pk>)
   , Fr(~me_sk)
   , Fr(~msg) ]
   --[ // check signatures of journalist's longterm signature and ephemeral encryption keys
-      Eq(verify(sig_j_pk, <'signature', j_pk>, nr_pk), true)
-    , Eq(verify(sig_je_pk, <'ephemeral', <je_dh_pk, je_ae_pk>>, j_pk), true)
+      Eq(verify(sig_j_pk, <'signature', <j_dh_pk, j_ae_pk>>, nr_pk), true)
+    , Eq(verify(sig_je_pk, <'ephemeral', <je_dh_pk, je_ae_pk>>, j_ae_pk), true)
       // sanity check of DH elements used
     , DHElement_Check(k)
       // Actions for Lemmas
     , Symmetric_Encryption_OUT(m, k)
-    , Source_Sent(s_pk, $J, je_dh_pk, je_ae_pk, $NR, m)
+    , Source_Sent(s_dh_pk, $J, <je_dh_pk, je_ae_pk>, $NR, m)
     ]->
   [ Out(<c, enc_gs>) ]
 
-rule Journalist_Recv [derivchecks, color=#6495ED]:
-  let s_pk = 'g'^s_sk
-      me_pk = 'g'^me_sk
-      k = hkdf(<s_pk^je_sk, me_pk^je_sk>)
-      m = <'msg_s2j', msg>
-      je_dh_pk = 'g'^je_sk
-      je_ae_pk = pk(je_sk)
+rule Journalist_Recv [color=#6495ED]:
+  let k = hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>)
+      m = <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>
+      je_dh_pk = 'g'^~je_sk
+      je_ae_pk = pk(~je_sk)
   in
-  [ In(<senc(m, k), aenc(<'s_pk', s_pk, me_pk>, pk(je_sk))>)
-  , !Journalist_Ephemeral_Key($J, je_sk)
+  [ In(<senc(m, k), aenc(<'s_pk', s_dh_pk, me_pk>, pk(~je_sk))>)
+  , !Journalist_Ephemeral_Key($J, ~je_sk)
   , !Journalist_Enrolled($NR, $J)]
   --[ DHElement_Check(k)
-    , OnlyOnce(<$J, je_sk>)
+    , OnlyOnce(<$J, ~je_sk>)
       // Actions for Lemmas
     , Symmetric_Encryption_IN(m, k)
-    , Journalist_Received($J, je_dh_pk, je_ae_pk, $NR, s_pk, m)
+    , Journalist_Received($J, <je_dh_pk, je_ae_pk>, $NR, s_dh_pk, m)
     ]->
-  [ Journalist_Recv($J, $NR, s_pk, msg) ]
+  [ Journalist_Recv($J, $NR, <s_dh_pk, s_ae_pk>, msg) ]
 
-// rule Journalist_Send [color=#6495ED]:
-//   let k = s_pk^~me_sk
-//       m = <'msg_j2s', ~msg, $J>
-//       c = senc(m, k)
-//       me_pk = 'g'^~me_sk
-//   in
-//   [ Journalist_Recv($J, $NR, s_pk, msg_old)
-//   , Fr(~msg)
-//   , Fr(~me_sk) ]
-//   --[ // Actions for Lemmas
-//       Symmetric_Encryption_OUT(m, k)
-//     , Journalist_Sent($J, s_pk, m)
-//     ]->
-//   [ Out(<c, me_pk>) ]
+rule Journalist_Send [color=#6495ED]:
+  let me_pk = 'g'^~me_sk
+      j_dh_pk = 'g'^~j_sk
+      k = hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)
+      m = <'msg_j2s', ~msg, j_dh_pk>
+      c = senc(m, k)
+      enc_gj = aenc(<'j_pk', j_dh_pk, me_pk>, s_ae_pk)
+  in
+  [ Journalist_Recv($J, $NR, <s_dh_pk, s_ae_pk>, msg_old)
+  , !Ltk_Journalist_Signing($J, ~j_sk)
+  , Fr(~msg)
+  , Fr(~me_sk) ]
+  --[ // Actions for Lemmas
+      Symmetric_Encryption_OUT(m, k)
+    , Journalist_Sent($J, s_dh_pk, m)
+    ]->
+  [ Out(<c, enc_gj>) ]
 
-// rule Source_Recv [color=#6495ED]:
-//   let s_pk = 'g'^s_sk
-//       k = me_pk^s_sk
-//       m = <'msg_j2s', msg, $J>
-//   in
-//   [ In(<senc(m, k), me_pk>)
-//   , !Ltk_Source_Encryption($S, s_sk) ]
-//   --[ DHElement_Check(me_pk)
-//     , DHElement_Check(k)
-//       // Actions for Lemmas
-//     , Symmetric_Encryption_IN(m, k)
-//     , Source_Received(s_pk, $J, m)
-//     ]->
-//   [ Source_Recv($S, msg, $J) ]
+rule Source_Recv [color=#6495ED]:
+  let s_dh_pk = 'g'^~s_sk
+      s_ae_pk = pk(~s_sk)
+      k = hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>)
+      m = <'msg_j2s', msg, j_dh_pk>
+  in
+  [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk, me_pk>, pk(~s_sk))>)
+  , !Ltk_Source_Encryption($S, ~s_sk)
+  , !Pk_Journalist_Signing($J, <j_dh_pk, j_ae_pk>) ]
+  --[ DHElement_Check(me_pk)
+    , DHElement_Check(j_dh_pk)
+    , DHElement_Check(k)
+      // Actions for Lemmas
+    , Symmetric_Encryption_IN(m, k)
+    , Source_Received(s_dh_pk, $J, m)
+    ]->
+  [ Source_Recv($S, msg, $J) ]
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
@@ -196,84 +209,82 @@ lemma Auto_Symmetric_Encryption [sources]:
 
 lemma Auto_Executability_Submission:
 exists-trace
-"Ex #t1 #t2 s_pk j je_dh_pk je_ae_pk nr m.
-        Source_Sent(s_pk, j, je_dh_pk, je_ae_pk, nr, m) @ #t1
-      & Journalist_Received(j, je_dh_pk, je_ae_pk, nr, s_pk, m) @ #t2
+"Ex #t1 #t2 s_pk j je_pk nr m.
+        Source_Sent(s_pk, j, je_pk, nr, m) @ #t1
+      & Journalist_Received(j, je_pk, nr, s_pk, m) @ #t2
       & (not Ex #x. SomeCompromise() @ #x)"
 
-// lemma Auto_Executability_Journalist_Response:
-// exists-trace
-// "Ex #t1 #t2 s_pk j m.
-//         Journalist_Sent(j, s_pk, m) @ #t1
-//       & Source_Received(s_pk, j, m) @ #t2
-//       & (not Ex #x. SomeCompromise() @ #x)"
+lemma Auto_Executability_Journalist_Response:
+exists-trace
+"Ex #t1 #t2 s_pk j_pk m.
+        Journalist_Sent(j_pk, s_pk, m) @ #t1
+      & Source_Received(s_pk, j_pk, m) @ #t2
+      & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Auto_Secrecy_Source_Message:
-"All #t s j je_dh_pk je_ae_pk nr m. 
-        Source_Sent(s, j, je_dh_pk, je_ae_pk, nr, m) @ #t
+"All #t s j je_pk nr m. 
+        Source_Sent(s, j, je_pk, nr, m) @ #t
   ==>   (not Ex #x. K(m) @ #x)
       | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_dh_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_ae_pk) @ #x)"
+      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_pk) @ #x)"
 
 lemma Auto_PFS_Source_Message:
-"All #t s j je_dh_pk je_ae_pk nr m. 
-        Source_Sent(s, j, je_dh_pk, je_ae_pk, nr, m) @ #t
+"All #t s j je_pk nr m. 
+        Source_Sent(s, j, je_pk, nr, m) @ #t
   ==>   (not Ex #x. K(m) @ #x)
       | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x & #x < #t)
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_dh_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_ae_pk) @ #x)"
+      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_pk) @ #x)"
 
-// lemma Auto_Secrecy_Journalist_Message:
-// "All #t1 #t2 j s_pk m. 
-//         Journalist_Sent(j, s_pk, m) @ #t1
-//       & Register_Source(s_pk) @ #t2
-//   ==>   (not Ex #x. K(m) @ #x)
-//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
+lemma Auto_Secrecy_Journalist_Message:
+"All #t1 #t2 j_pk s_pk m. 
+        Journalist_Sent(j_pk, s_pk, m) @ #t1
+      & Register_Source(s_pk) @ #t2
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
 
-// lemma Auto_PFS_Journalist_Message:
-// "All #t1 #t2 j s_pk m. 
-//         Journalist_Sent(j, s_pk, m) @ #t1
-//       & Register_Source(s_pk) @ #t2
-//   ==>   (not Ex #x. K(m) @ #x)
-//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x & #x < #t1)"
+lemma Auto_PFS_Journalist_Message:
+"All #t1 #t2 j_pk s_pk m. 
+        Journalist_Sent(j_pk, s_pk, m) @ #t1
+      & Register_Source(s_pk) @ #t2
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x & #x < #t1)"
 
 lemma Auto_Non_Injective_Agreement_Source_Message:
-"All #t1 #t2 j je_dh_pk je_ae_pk nr s_pk m. 
-        Journalist_Received(j, je_dh_pk, je_ae_pk, nr, s_pk, m) @ #t1
+"All #t1 #t2 j je_pk nr s_pk m. 
+        Journalist_Received(j, je_pk, nr, s_pk, m) @ #t1
       & Register_Source(s_pk) @ #t2
-  ==>   (Ex #x. Source_Sent(s_pk, j, je_dh_pk, je_ae_pk, nr, m) @ #x & #x < #t1) 
+  ==>   (Ex #x. Source_Sent(s_pk, j, je_pk, nr, m) @ #x & #x < #t1) 
       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_dh_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_ae_pk) @ #x)"
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_pk) @ #x)"
   
 lemma Auto_Injective_Agreement_Source_Message:
-"All #t1 #t2 j je_dh_pk je_ae_pk nr s_pk m. 
-        Journalist_Received(j, je_dh_pk, je_ae_pk, nr, s_pk, m) @ #t1
+"All #t1 #t2 j je_pk nr s_pk m. 
+        Journalist_Received(j, je_pk, nr, s_pk, m) @ #t1
       & Register_Source(s_pk) @ #t2
-  ==>   (Ex #x1. Source_Sent(s_pk, j, je_dh_pk, je_ae_pk, nr, m) @ #x1 
+  ==>   (Ex #x1. Source_Sent(s_pk, j, je_pk, nr, m) @ #x1 
               & #x1 < #t1
-              & not (Ex j_2 je_dh_pk_2 je_ae_pk_2 nr_2 s_pk_2 #x2. Journalist_Received(j_2, je_dh_pk_2, je_ae_pk_2, nr_2, s_pk_2, m) @ #x2 & not (#x2 = #t1)))
+              & not (Ex j_2 je_pk_2 nr_2 s_pk_2 #x2. Journalist_Received(j_2, je_pk_2, nr_2, s_pk_2, m) @ #x2 & not (#x2 = #t1)))
       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_dh_pk) @ #x)
-      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_ae_pk) @ #x)"
+      | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)
+      | (Ex #x. Reveal_Journalist_Ephemeral_Key(je_pk) @ #x)"
 
-// lemma Auto_Non_Injective_Agreement_Journalist_Message:
-// "All #t1 j s_pk m. 
-//         Source_Received(s_pk, j, m) @ #t1
-//   ==>   (Ex #x. Journalist_Sent(j, s_pk, m) @ #x & #x < #t1) 
-//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
-//       | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)"
+lemma Auto_Non_Injective_Agreement_Journalist_Message:
+"All #t1 j_pk s_pk m.
+        Source_Received(s_pk, j_pk, m) @ #t1
+  ==>   (Ex #x. Journalist_Sent(j_pk, s_pk, m) @ #x & #x < #t1) 
+      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
+      | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
   
-// lemma Auto_Injective_Agreement_Journalist_Message:
-// "All #t1 j s_pk m. 
-//         Source_Received(s_pk, j, m) @ #t1
-//   ==>   (Ex #x1. Journalist_Sent(j, s_pk, m) @ #x1 
-//               & #x1 < #t1
-//               & not (Ex j_2 s_pk_2 #x2. Source_Received(s_pk_2, j_2, m) @ #x2 & not (#x2 = #t1)))
-//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
-//       | (Ex #x. Reveal_Journalist_Signing_Key(j) @ #x)"
+lemma Auto_Injective_Agreement_Journalist_Message:
+"All #t1 j_pk s_pk m. 
+        Source_Received(s_pk, j_pk, m) @ #t1
+  ==>   (Ex #x1. Journalist_Sent(j_pk, s_pk, m) @ #x1 
+              & #x1 < #t1
+              & not (Ex j_pk_2 s_pk_2 #x2. Source_Received(s_pk_2, j_pk_2, m) @ #x2 & not (#x2 = #t1)))
+      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
+      | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
 
 end

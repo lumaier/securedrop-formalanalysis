@@ -1,0 +1,4266 @@
+theory SecureDrop begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: adec/2, aenc/2, fst/1, hkdf/1, pair/2, pk/1, sdec/2, senc/2,
+           sign/2, snd/1, true/0, verify/3
+equations:
+    adec(aenc(x.1, pk(x.2)), x.2) = x.1,
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+
+
+
+
+
+
+
+
+
+
+
+
+rule (modulo E) Register_Newsroom_Key[color=#fdfd96]:
+   [ Fr( ~ltk ) ]
+  -->
+   [
+   !Ltk_Newsroom( $A, ~ltk ), !Pk_Newsroom( $A, pk(~ltk) ), Out( pk(~ltk) )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Newsroom_Key[color=#ff6961]:
+   [ !Ltk_Newsroom( A, ~ltk ) ]
+  --[ Reveal_Newsroom_Key( A ), Reveal( A ), SomeCompromise( ) ]->
+   [ Out( ~ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Register_Source_Encryption_Key[color=#fdfd96]:
+   [ Fr( ~ltk ) ]
+  --[ Register_Source( 'g'^~ltk ) ]->
+   [ !Ltk_Source_Encryption( $A, ~ltk ), Out( <'g'^~ltk, pk(~ltk)> ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Source_Encryption_Key[color=#ff6961]:
+   [ !Ltk_Source_Encryption( A, ~ltk ) ]
+  --[
+  Reveal_Source_Encryption_Key( A ),
+  Reveal_Source_Encryption_Key( 'g'^~ltk ), Reveal_Longterm_Secret( A ),
+  Reveal( A ), SomeCompromise( )
+  ]->
+   [ Out( ~ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Journalist_Enrollment[color=#ff7f50]:
+   [ !Ltk_Newsroom( $NR, ~nr_sk ), Fr( ~j_sk ) ]
+  --[ Journalist_Verified( $NR, $J ), OnlyOnce( $J ) ]->
+   [
+   Out( <<'g'^~j_sk, pk(~j_sk)>, 
+         sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~nr_sk)>
+   ),
+   !Journalist_Enrolled( $NR, $J ), !Ltk_Journalist_Signing( $J, ~j_sk ),
+   !Pk_Journalist_Signing( $J, <'g'^~j_sk, pk(~j_sk)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_Signing_Key[color=#ff6961]:
+   [ !Ltk_Journalist_Signing( A, ~ltk ) ]
+  --[
+  Reveal_Journalist_Signing_Key( A ),
+  Reveal_Journalist_Signing_Key( 'g'^~ltk ), Reveal_Longterm_Secret( A ),
+  Reveal( A ), SomeCompromise( )
+  ]->
+   [ Out( ~ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Journalist_Register_Ephemeral_Key[color=#ff7f50]:
+   [ !Ltk_Journalist_Signing( $J, ~j_sk ), Fr( ~je_sk ) ]
+  -->
+   [
+   Out( <<'g'^~je_sk, pk(~je_sk)>, 
+         sign(<'ephemeral', 'g'^~je_sk, pk(~je_sk)>, ~j_sk)>
+   ),
+   !Journalist_Ephemeral_Key( $J, ~je_sk ),
+   Journalist_Ephemeral_Key_Reveal( $J, ~je_sk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_Ephemeral_Key[color=#ff6961]:
+   [ Journalist_Ephemeral_Key_Reveal( J, ~je_sk ) ]
+  --[
+  Reveal_Journalist_Ephemeral_Key( <'g'^~je_sk, pk(~je_sk)> ), Reveal( J ),
+  SomeCompromise( )
+  ]->
+   [ Out( ~je_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Source_Send[color=#6495ed]:
+   [
+   !Ltk_Source_Encryption( $S, ~s_sk ), !Pk_Newsroom( $NR, nr_pk ),
+   !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ),
+   In( <<j_dh_pk, j_ae_pk>, sig_j_pk, <je_dh_pk, je_ae_pk>, sig_je_pk> ),
+   Fr( ~me_sk ), Fr( ~msg )
+   ]
+  --[
+  Eq( verify(sig_j_pk, <'signature', j_dh_pk, j_ae_pk>, nr_pk), true ),
+  Eq( verify(sig_je_pk, <'ephemeral', je_dh_pk, je_ae_pk>, j_ae_pk), true
+  ),
+  DHElement_Check( hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>) ),
+  Symmetric_Encryption_OUT( <'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR
+                            >,
+                            hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>)
+  ),
+  Source_Sent( 'g'^~s_sk, $J, <je_dh_pk, je_ae_pk>, $NR,
+               <'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR>
+  )
+  ]->
+   [
+   Out( <
+         senc(<'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR>,
+              hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>)), 
+         aenc(<'s_pk', 'g'^~s_sk, 'g'^~me_sk>, je_ae_pk)>
+   )
+   ]
+
+  /*
+  rule (modulo AC) Source_Send[color=#6495ed]:
+     [
+     !Ltk_Source_Encryption( $S, ~s_sk ), !Pk_Newsroom( $NR, nr_pk ),
+     !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ),
+     In( <<j_dh_pk, j_ae_pk>, sig_j_pk, <je_dh_pk, je_ae_pk>, sig_je_pk> ),
+     Fr( ~me_sk ), Fr( ~msg )
+     ]
+    --[
+    Eq( z.2, true ), Eq( z.3, true ), DHElement_Check( hkdf(<z, z.1>) ),
+    Symmetric_Encryption_OUT( <'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR
+                              >,
+                              hkdf(<z, z.1>)
+    ),
+    Source_Sent( 'g'^~s_sk, $J, <je_dh_pk, je_ae_pk>, $NR,
+                 <'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR>
+    )
+    ]->
+     [
+     Out( <
+           senc(<'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR>, hkdf(<z, z.1>)), 
+           aenc(<'s_pk', 'g'^~s_sk, 'g'^~me_sk>, je_ae_pk)>
+     )
+     ]
+    variants (modulo AC)
+     1. ~me_sk
+              = ~me_sk.32
+        ~s_sk = ~s_sk.34
+        j_ae_pk
+              = j_ae_pk.35
+        j_dh_pk
+              = j_dh_pk.36
+        je_ae_pk
+              = je_ae_pk.37
+        je_dh_pk
+              = je_dh_pk.38
+        nr_pk = nr_pk.39
+        sig_j_pk
+              = sig_j_pk.40
+        sig_je_pk
+              = sig_je_pk.41
+        z     = je_dh_pk.38^~s_sk.34
+        z.1   = je_dh_pk.38^~me_sk.32
+        z.2   = verify(sig_j_pk.40, <'signature', j_dh_pk.36, j_ae_pk.35>,
+                       nr_pk.39)
+        z.3   = verify(sig_je_pk.41, <'ephemeral', je_dh_pk.38, je_ae_pk.37>,
+                       j_ae_pk.35)
+    
+     2. ~me_sk
+              = ~me_sk.35
+        ~s_sk = ~me_sk.35
+        j_ae_pk
+              = j_ae_pk.38
+        j_dh_pk
+              = j_dh_pk.39
+        je_ae_pk
+              = je_ae_pk.40
+        je_dh_pk
+              = z.47^inv(~me_sk.35)
+        nr_pk = nr_pk.42
+        sig_j_pk
+              = sig_j_pk.43
+        sig_je_pk
+              = sig_je_pk.44
+        z     = z.47
+        z.1   = z.47
+        z.2   = verify(sig_j_pk.43, <'signature', j_dh_pk.39, j_ae_pk.38>,
+                       nr_pk.42)
+        z.3   = verify(sig_je_pk.44,
+                       <'ephemeral', z.47^inv(~me_sk.35), je_ae_pk.40>, j_ae_pk.38)
+    
+     3. ~me_sk
+              = ~me_sk.35
+        ~s_sk = ~s_sk.37
+        j_ae_pk
+              = j_ae_pk.38
+        j_dh_pk
+              = j_dh_pk.39
+        je_ae_pk
+              = je_ae_pk.40
+        je_dh_pk
+              = z.47^inv(~s_sk.37)
+        nr_pk = nr_pk.42
+        sig_j_pk
+              = sig_j_pk.43
+        sig_je_pk
+              = sig_je_pk.44
+        z     = z.47
+        z.1   = z.47^(~me_sk.35*inv(~s_sk.37))
+        z.2   = verify(sig_j_pk.43, <'signature', j_dh_pk.39, j_ae_pk.38>,
+                       nr_pk.42)
+        z.3   = verify(sig_je_pk.44,
+                       <'ephemeral', z.47^inv(~s_sk.37), je_ae_pk.40>, j_ae_pk.38)
+    
+     4. ~me_sk
+              = ~me_sk.36
+        ~s_sk = ~s_sk.38
+        j_ae_pk
+              = j_ae_pk.39
+        j_dh_pk
+              = j_dh_pk.40
+        je_ae_pk
+              = je_ae_pk.41
+        je_dh_pk
+              = z.49^inv(~me_sk.36)
+        nr_pk = nr_pk.43
+        sig_j_pk
+              = sig_j_pk.44
+        sig_je_pk
+              = sig_je_pk.45
+        z     = z.49^(~s_sk.38*inv(~me_sk.36))
+        z.1   = z.49
+        z.2   = verify(sig_j_pk.44, <'signature', j_dh_pk.40, j_ae_pk.39>,
+                       nr_pk.43)
+        z.3   = verify(sig_je_pk.45,
+                       <'ephemeral', z.49^inv(~me_sk.36), je_ae_pk.41>, j_ae_pk.39)
+    
+     5. ~me_sk
+              = ~me_sk.221
+        ~s_sk = ~s_sk.223
+        j_ae_pk
+              = pk(x.437)
+        j_dh_pk
+              = j_dh_pk.225
+        je_ae_pk
+              = je_ae_pk.226
+        je_dh_pk
+              = je_dh_pk.227
+        nr_pk = nr_pk.228
+        sig_j_pk
+              = sig_j_pk.229
+        sig_je_pk
+              = sign(<'ephemeral', je_dh_pk.227, je_ae_pk.226>, x.437)
+        z     = je_dh_pk.227^~s_sk.223
+        z.1   = je_dh_pk.227^~me_sk.221
+        z.2   = verify(sig_j_pk.229, <'signature', j_dh_pk.225, pk(x.437)>,
+                       nr_pk.228)
+        z.3   = true
+    
+     6. ~me_sk
+              = ~me_sk.222
+        ~s_sk = ~s_sk.224
+        j_ae_pk
+              = j_ae_pk.225
+        j_dh_pk
+              = j_dh_pk.226
+        je_ae_pk
+              = je_ae_pk.227
+        je_dh_pk
+              = x.438^x.439
+        nr_pk = nr_pk.229
+        sig_j_pk
+              = sig_j_pk.230
+        sig_je_pk
+              = sig_je_pk.231
+        z     = x.438^(~s_sk.224*x.439)
+        z.1   = x.438^(~me_sk.222*x.439)
+        z.2   = verify(sig_j_pk.230, <'signature', j_dh_pk.226, j_ae_pk.225>,
+                       nr_pk.229)
+        z.3   = verify(sig_je_pk.231, <'ephemeral', x.438^x.439, je_ae_pk.227>,
+                       j_ae_pk.225)
+    
+     7. ~me_sk
+              = ~me_sk.222
+        ~s_sk = ~s_sk.224
+        j_ae_pk
+              = pk(x.439)
+        j_dh_pk
+              = j_dh_pk.226
+        je_ae_pk
+              = je_ae_pk.227
+        je_dh_pk
+              = z.234^inv(~s_sk.224)
+        nr_pk = nr_pk.229
+        sig_j_pk
+              = sig_j_pk.230
+        sig_je_pk
+              = sign(<'ephemeral', z.234^inv(~s_sk.224), je_ae_pk.227>, x.439)
+        z     = z.234
+        z.1   = z.234^(~me_sk.222*inv(~s_sk.224))
+        z.2   = verify(sig_j_pk.230, <'signature', j_dh_pk.226, pk(x.439)>,
+                       nr_pk.229)
+        z.3   = true
+    
+     8. ~me_sk
+              = ~me_sk.223
+        ~s_sk = ~me_sk.223
+        j_ae_pk
+              = pk(x.441)
+        j_dh_pk
+              = j_dh_pk.227
+        je_ae_pk
+              = je_ae_pk.228
+        je_dh_pk
+              = z.235^inv(~me_sk.223)
+        nr_pk = nr_pk.230
+        sig_j_pk
+              = sig_j_pk.231
+        sig_je_pk
+              = sign(<'ephemeral', z.235^inv(~me_sk.223), je_ae_pk.228>, x.441)
+        z     = z.235
+        z.1   = z.235
+        z.2   = verify(sig_j_pk.231, <'signature', j_dh_pk.227, pk(x.441)>,
+                       nr_pk.230)
+        z.3   = true
+    
+     9. ~me_sk
+              = ~me_sk.224
+        ~s_sk = ~s_sk.226
+        j_ae_pk
+              = pk(x.443)
+        j_dh_pk
+              = j_dh_pk.228
+        je_ae_pk
+              = je_ae_pk.229
+        je_dh_pk
+              = z.237^inv(~me_sk.224)
+        nr_pk = nr_pk.231
+        sig_j_pk
+              = sig_j_pk.232
+        sig_je_pk
+              = sign(<'ephemeral', z.237^inv(~me_sk.224), je_ae_pk.229>, x.443)
+        z     = z.237^(~s_sk.226*inv(~me_sk.224))
+        z.1   = z.237
+        z.2   = verify(sig_j_pk.232, <'signature', j_dh_pk.228, pk(x.443)>,
+                       nr_pk.231)
+        z.3   = true
+    
+    10. ~me_sk
+              = ~me_sk.225
+        ~s_sk = ~s_sk.227
+        j_ae_pk
+              = j_ae_pk.228
+        j_dh_pk
+              = j_dh_pk.229
+        je_ae_pk
+              = je_ae_pk.230
+        je_dh_pk
+              = je_dh_pk.231
+        nr_pk = pk(x.445)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.229, j_ae_pk.228>, x.445)
+        sig_je_pk
+              = sig_je_pk.234
+        z     = je_dh_pk.231^~s_sk.227
+        z.1   = je_dh_pk.231^~me_sk.225
+        z.2   = true
+        z.3   = verify(sig_je_pk.234, <'ephemeral', je_dh_pk.231, je_ae_pk.230>,
+                       j_ae_pk.228)
+    
+    11. ~me_sk
+              = ~me_sk.225
+        ~s_sk = ~s_sk.227
+        j_ae_pk
+              = pk(x.441)
+        j_dh_pk
+              = j_dh_pk.229
+        je_ae_pk
+              = je_ae_pk.230
+        je_dh_pk
+              = je_dh_pk.231
+        nr_pk = pk(x.445)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.229, pk(x.441)>, x.445)
+        sig_je_pk
+              = sign(<'ephemeral', je_dh_pk.231, je_ae_pk.230>, x.441)
+        z     = je_dh_pk.231^~s_sk.227
+        z.1   = je_dh_pk.231^~me_sk.225
+        z.2   = true
+        z.3   = true
+    
+    12. ~me_sk
+              = ~me_sk.225
+        ~s_sk = ~s_sk.227
+        j_ae_pk
+              = pk(x.441)
+        j_dh_pk
+              = j_dh_pk.229
+        je_ae_pk
+              = je_ae_pk.230
+        je_dh_pk
+              = x.444^x.445
+        nr_pk = nr_pk.232
+        sig_j_pk
+              = sig_j_pk.233
+        sig_je_pk
+              = sign(<'ephemeral', x.444^x.445, je_ae_pk.230>, x.441)
+        z     = x.444^(~s_sk.227*x.445)
+        z.1   = x.444^(~me_sk.225*x.445)
+        z.2   = verify(sig_j_pk.233, <'signature', j_dh_pk.229, pk(x.441)>,
+                       nr_pk.232)
+        z.3   = true
+    
+    13. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = j_ae_pk.229
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = z.238^inv(~s_sk.228)
+        nr_pk = pk(x.447)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.230, j_ae_pk.229>, x.447)
+        sig_je_pk
+              = sig_je_pk.235
+        z     = z.238
+        z.1   = z.238^(~me_sk.226*inv(~s_sk.228))
+        z.2   = true
+        z.3   = verify(sig_je_pk.235,
+                       <'ephemeral', z.238^inv(~s_sk.228), je_ae_pk.231>, j_ae_pk.229)
+    
+    14. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = j_ae_pk.229
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.445^x.446
+        nr_pk = pk(x.447)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.230, j_ae_pk.229>, x.447)
+        sig_je_pk
+              = sig_je_pk.235
+        z     = x.445^(~s_sk.228*x.446)
+        z.1   = x.445^(~me_sk.226*x.446)
+        z.2   = true
+        z.3   = verify(sig_je_pk.235, <'ephemeral', x.445^x.446, je_ae_pk.231>,
+                       j_ae_pk.229)
+    
+    15. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = j_ae_pk.229
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.446^inv((~s_sk.228*x.447))
+        nr_pk = nr_pk.233
+        sig_j_pk
+              = sig_j_pk.234
+        sig_je_pk
+              = sig_je_pk.235
+        z     = x.446^inv(x.447)
+        z.1   = x.446^(~me_sk.226*inv((~s_sk.228*x.447)))
+        z.2   = verify(sig_j_pk.234, <'signature', j_dh_pk.230, j_ae_pk.229>,
+                       nr_pk.233)
+        z.3   = verify(sig_je_pk.235,
+                       <'ephemeral', x.446^inv((~s_sk.228*x.447)), je_ae_pk.231>, j_ae_pk.229)
+    
+    16. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = j_ae_pk.229
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.446^(x.447*inv(~s_sk.228))
+        nr_pk = nr_pk.233
+        sig_j_pk
+              = sig_j_pk.234
+        sig_je_pk
+              = sig_je_pk.235
+        z     = x.446^x.447
+        z.1   = x.446^(~me_sk.226*x.447*inv(~s_sk.228))
+        z.2   = verify(sig_j_pk.234, <'signature', j_dh_pk.230, j_ae_pk.229>,
+                       nr_pk.233)
+        z.3   = verify(sig_je_pk.235,
+                       <'ephemeral', x.446^(x.447*inv(~s_sk.228)), je_ae_pk.231>, j_ae_pk.229)
+    
+    17. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = pk(x.442)
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.445^x.446
+        nr_pk = pk(x.447)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.230, pk(x.442)>, x.447)
+        sig_je_pk
+              = sign(<'ephemeral', x.445^x.446, je_ae_pk.231>, x.442)
+        z     = x.445^(~s_sk.228*x.446)
+        z.1   = x.445^(~me_sk.226*x.446)
+        z.2   = true
+        z.3   = true
+    
+    18. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = pk(x.443)
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = z.238^inv(~s_sk.228)
+        nr_pk = pk(x.447)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.230, pk(x.443)>, x.447)
+        sig_je_pk
+              = sign(<'ephemeral', z.238^inv(~s_sk.228), je_ae_pk.231>, x.443)
+        z     = z.238
+        z.1   = z.238^(~me_sk.226*inv(~s_sk.228))
+        z.2   = true
+        z.3   = true
+    
+    19. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = pk(x.443)
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.446^inv((~s_sk.228*x.447))
+        nr_pk = nr_pk.233
+        sig_j_pk
+              = sig_j_pk.234
+        sig_je_pk
+              = sign(<'ephemeral', x.446^inv((~s_sk.228*x.447)), je_ae_pk.231>, x.443)
+        z     = x.446^inv(x.447)
+        z.1   = x.446^(~me_sk.226*inv((~s_sk.228*x.447)))
+        z.2   = verify(sig_j_pk.234, <'signature', j_dh_pk.230, pk(x.443)>,
+                       nr_pk.233)
+        z.3   = true
+    
+    20. ~me_sk
+              = ~me_sk.226
+        ~s_sk = ~s_sk.228
+        j_ae_pk
+              = pk(x.443)
+        j_dh_pk
+              = j_dh_pk.230
+        je_ae_pk
+              = je_ae_pk.231
+        je_dh_pk
+              = x.446^(x.447*inv(~s_sk.228))
+        nr_pk = nr_pk.233
+        sig_j_pk
+              = sig_j_pk.234
+        sig_je_pk
+              = sign(<'ephemeral', x.446^(x.447*inv(~s_sk.228)), je_ae_pk.231>, x.443)
+        z     = x.446^x.447
+        z.1   = x.446^(~me_sk.226*x.447*inv(~s_sk.228))
+        z.2   = verify(sig_j_pk.234, <'signature', j_dh_pk.230, pk(x.443)>,
+                       nr_pk.233)
+        z.3   = true
+    
+    21. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = z.239^inv(~me_sk.227)
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, j_ae_pk.230>, x.449)
+        sig_je_pk
+              = sig_je_pk.236
+        z     = z.239
+        z.1   = z.239
+        z.2   = true
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', z.239^inv(~me_sk.227), je_ae_pk.232>, j_ae_pk.230)
+    
+    22. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.448^inv((~me_sk.227*x.449))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.448^inv(x.449)
+        z.1   = x.448^inv(x.449)
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, j_ae_pk.230>,
+                       nr_pk.234)
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.448^inv((~me_sk.227*x.449)), je_ae_pk.232>, j_ae_pk.230)
+    
+    23. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.448^(x.449*inv(~me_sk.227))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.448^x.449
+        z.1   = x.448^x.449
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, j_ae_pk.230>,
+                       nr_pk.234)
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.448^(x.449*inv(~me_sk.227)), je_ae_pk.232>, j_ae_pk.230)
+    
+    24. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = pk(x.445)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = z.239^inv(~me_sk.227)
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, pk(x.445)>, x.449)
+        sig_je_pk
+              = sign(<'ephemeral', z.239^inv(~me_sk.227), je_ae_pk.232>, x.445)
+        z     = z.239
+        z.1   = z.239
+        z.2   = true
+        z.3   = true
+    
+    25. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = pk(x.445)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.448^inv((~me_sk.227*x.449))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sign(<'ephemeral', x.448^inv((~me_sk.227*x.449)), je_ae_pk.232>, x.445)
+        z     = x.448^inv(x.449)
+        z.1   = x.448^inv(x.449)
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, pk(x.445)>,
+                       nr_pk.234)
+        z.3   = true
+    
+    26. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~me_sk.227
+        j_ae_pk
+              = pk(x.445)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.448^(x.449*inv(~me_sk.227))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sign(<'ephemeral', x.448^(x.449*inv(~me_sk.227)), je_ae_pk.232>, x.445)
+        z     = x.448^x.449
+        z.1   = x.448^x.449
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, pk(x.445)>,
+                       nr_pk.234)
+        z.3   = true
+    
+    27. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^inv((~s_sk.229*x.448))
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, j_ae_pk.230>, x.449)
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.447^inv(x.448)
+        z.1   = x.447^(~me_sk.227*inv((~s_sk.229*x.448)))
+        z.2   = true
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.447^inv((~s_sk.229*x.448)), je_ae_pk.232>, j_ae_pk.230)
+    
+    28. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^(x.448*inv(~s_sk.229))
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, j_ae_pk.230>, x.449)
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.447^x.448
+        z.1   = x.447^(~me_sk.227*x.448*inv(~s_sk.229))
+        z.2   = true
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.447^(x.448*inv(~s_sk.229)), je_ae_pk.232>, j_ae_pk.230)
+    
+    29. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^(x.448*inv((~s_sk.229*x.449)))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.447^(x.448*inv(x.449))
+        z.1   = x.447^(~me_sk.227*x.448*inv((~s_sk.229*x.449)))
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, j_ae_pk.230>,
+                       nr_pk.234)
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.447^(x.448*inv((~s_sk.229*x.449))), je_ae_pk.232>,
+                       j_ae_pk.230)
+    
+    30. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = j_ae_pk.230
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.449^inv((~me_sk.227*~s_sk.229))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sig_je_pk.236
+        z     = x.449^inv(~me_sk.227)
+        z.1   = x.449^inv(~s_sk.229)
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, j_ae_pk.230>,
+                       nr_pk.234)
+        z.3   = verify(sig_je_pk.236,
+                       <'ephemeral', x.449^inv((~me_sk.227*~s_sk.229)), je_ae_pk.232>,
+                       j_ae_pk.230)
+    
+    31. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = pk(x.444)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^inv((~s_sk.229*x.448))
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, pk(x.444)>, x.449)
+        sig_je_pk
+              = sign(<'ephemeral', x.447^inv((~s_sk.229*x.448)), je_ae_pk.232>, x.444)
+        z     = x.447^inv(x.448)
+        z.1   = x.447^(~me_sk.227*inv((~s_sk.229*x.448)))
+        z.2   = true
+        z.3   = true
+    
+    32. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = pk(x.444)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^(x.448*inv(~s_sk.229))
+        nr_pk = pk(x.449)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.231, pk(x.444)>, x.449)
+        sig_je_pk
+              = sign(<'ephemeral', x.447^(x.448*inv(~s_sk.229)), je_ae_pk.232>, x.444)
+        z     = x.447^x.448
+        z.1   = x.447^(~me_sk.227*x.448*inv(~s_sk.229))
+        z.2   = true
+        z.3   = true
+    
+    33. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = pk(x.444)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.447^(x.448*inv((~s_sk.229*x.449)))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sign(<'ephemeral', x.447^(x.448*inv((~s_sk.229*x.449))), je_ae_pk.232>,
+                     x.444)
+        z     = x.447^(x.448*inv(x.449))
+        z.1   = x.447^(~me_sk.227*x.448*inv((~s_sk.229*x.449)))
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, pk(x.444)>,
+                       nr_pk.234)
+        z.3   = true
+    
+    34. ~me_sk
+              = ~me_sk.227
+        ~s_sk = ~s_sk.229
+        j_ae_pk
+              = pk(x.446)
+        j_dh_pk
+              = j_dh_pk.231
+        je_ae_pk
+              = je_ae_pk.232
+        je_dh_pk
+              = x.449^inv((~me_sk.227*~s_sk.229))
+        nr_pk = nr_pk.234
+        sig_j_pk
+              = sig_j_pk.235
+        sig_je_pk
+              = sign(<'ephemeral', x.449^inv((~me_sk.227*~s_sk.229)), je_ae_pk.232>,
+                     x.446)
+        z     = x.449^inv(~me_sk.227)
+        z.1   = x.449^inv(~s_sk.229)
+        z.2   = verify(sig_j_pk.235, <'signature', j_dh_pk.231, pk(x.446)>,
+                       nr_pk.234)
+        z.3   = true
+    
+    35. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^inv((~me_sk.228*x.450))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, j_ae_pk.231>, x.451)
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.449^inv(x.450)
+        z.1   = x.449^inv(x.450)
+        z.2   = true
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.449^inv((~me_sk.228*x.450)), je_ae_pk.233>, j_ae_pk.231)
+    
+    36. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^(x.450*inv(~me_sk.228))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, j_ae_pk.231>, x.451)
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.449^x.450
+        z.1   = x.449^x.450
+        z.2   = true
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.449^(x.450*inv(~me_sk.228)), je_ae_pk.233>, j_ae_pk.231)
+    
+    37. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^(x.450*inv((~me_sk.228*x.451)))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.449^(x.450*inv(x.451))
+        z.1   = x.449^(x.450*inv(x.451))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, j_ae_pk.231>,
+                       nr_pk.235)
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.449^(x.450*inv((~me_sk.228*x.451))), je_ae_pk.233>,
+                       j_ae_pk.231)
+    
+    38. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = pk(x.446)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^inv((~me_sk.228*x.450))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, pk(x.446)>, x.451)
+        sig_je_pk
+              = sign(<'ephemeral', x.449^inv((~me_sk.228*x.450)), je_ae_pk.233>, x.446)
+        z     = x.449^inv(x.450)
+        z.1   = x.449^inv(x.450)
+        z.2   = true
+        z.3   = true
+    
+    39. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = pk(x.446)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^(x.450*inv(~me_sk.228))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, pk(x.446)>, x.451)
+        sig_je_pk
+              = sign(<'ephemeral', x.449^(x.450*inv(~me_sk.228)), je_ae_pk.233>, x.446)
+        z     = x.449^x.450
+        z.1   = x.449^x.450
+        z.2   = true
+        z.3   = true
+    
+    40. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~me_sk.228
+        j_ae_pk
+              = pk(x.446)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.449^(x.450*inv((~me_sk.228*x.451)))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sign(<'ephemeral', x.449^(x.450*inv((~me_sk.228*x.451))), je_ae_pk.233
+                     >,
+                     x.446)
+        z     = x.449^(x.450*inv(x.451))
+        z.1   = x.449^(x.450*inv(x.451))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, pk(x.446)>,
+                       nr_pk.235)
+        z.3   = true
+    
+    41. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = z.241^inv(~me_sk.228)
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, j_ae_pk.231>, x.451)
+        sig_je_pk
+              = sig_je_pk.237
+        z     = z.241^(~s_sk.230*inv(~me_sk.228))
+        z.1   = z.241
+        z.2   = true
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', z.241^inv(~me_sk.228), je_ae_pk.233>, j_ae_pk.231)
+    
+    42. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.448^(x.449*inv((~s_sk.230*x.450)))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, j_ae_pk.231>, x.451)
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.448^(x.449*inv(x.450))
+        z.1   = x.448^(~me_sk.228*x.449*inv((~s_sk.230*x.450)))
+        z.2   = true
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.448^(x.449*inv((~s_sk.230*x.450))), je_ae_pk.233>,
+                       j_ae_pk.231)
+    
+    43. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*~s_sk.230))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, j_ae_pk.231>, x.451)
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.450^inv(~me_sk.228)
+        z.1   = x.450^inv(~s_sk.230)
+        z.2   = true
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.450^inv((~me_sk.228*~s_sk.230)), je_ae_pk.233>,
+                       j_ae_pk.231)
+    
+    44. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*~s_sk.230*x.451))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.450^inv((~me_sk.228*x.451))
+        z.1   = x.450^inv((~s_sk.230*x.451))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, j_ae_pk.231>,
+                       nr_pk.235)
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.450^inv((~me_sk.228*~s_sk.230*x.451)), je_ae_pk.233>,
+                       j_ae_pk.231)
+    
+    45. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*x.451))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.450^(~s_sk.230*inv((~me_sk.228*x.451)))
+        z.1   = x.450^inv(x.451)
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, j_ae_pk.231>,
+                       nr_pk.235)
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.450^inv((~me_sk.228*x.451)), je_ae_pk.233>, j_ae_pk.231)
+    
+    46. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^(x.451*inv(~me_sk.228))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.450^(~s_sk.230*x.451*inv(~me_sk.228))
+        z.1   = x.450^x.451
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, j_ae_pk.231>,
+                       nr_pk.235)
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.450^(x.451*inv(~me_sk.228)), je_ae_pk.233>, j_ae_pk.231)
+    
+    47. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = j_ae_pk.231
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^(x.451*inv((~me_sk.228*~s_sk.230)))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sig_je_pk.237
+        z     = x.450^(x.451*inv(~me_sk.228))
+        z.1   = x.450^(x.451*inv(~s_sk.230))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, j_ae_pk.231>,
+                       nr_pk.235)
+        z.3   = verify(sig_je_pk.237,
+                       <'ephemeral', x.450^(x.451*inv((~me_sk.228*~s_sk.230))), je_ae_pk.233>,
+                       j_ae_pk.231)
+    
+    48. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.445)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.448^(x.449*inv((~s_sk.230*x.450)))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, pk(x.445)>, x.451)
+        sig_je_pk
+              = sign(<'ephemeral', x.448^(x.449*inv((~s_sk.230*x.450))), je_ae_pk.233>,
+                     x.445)
+        z     = x.448^(x.449*inv(x.450))
+        z.1   = x.448^(~me_sk.228*x.449*inv((~s_sk.230*x.450)))
+        z.2   = true
+        z.3   = true
+    
+    49. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = z.241^inv(~me_sk.228)
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, pk(x.447)>, x.451)
+        sig_je_pk
+              = sign(<'ephemeral', z.241^inv(~me_sk.228), je_ae_pk.233>, x.447)
+        z     = z.241^(~s_sk.230*inv(~me_sk.228))
+        z.1   = z.241
+        z.2   = true
+        z.3   = true
+    
+    50. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*~s_sk.230))
+        nr_pk = pk(x.451)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.232, pk(x.447)>, x.451)
+        sig_je_pk
+              = sign(<'ephemeral', x.450^inv((~me_sk.228*~s_sk.230)), je_ae_pk.233>,
+                     x.447)
+        z     = x.450^inv(~me_sk.228)
+        z.1   = x.450^inv(~s_sk.230)
+        z.2   = true
+        z.3   = true
+    
+    51. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*~s_sk.230*x.451))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sign(<'ephemeral', x.450^inv((~me_sk.228*~s_sk.230*x.451)), 
+                      je_ae_pk.233>,
+                     x.447)
+        z     = x.450^inv((~me_sk.228*x.451))
+        z.1   = x.450^inv((~s_sk.230*x.451))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, pk(x.447)>,
+                       nr_pk.235)
+        z.3   = true
+    
+    52. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^inv((~me_sk.228*x.451))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sign(<'ephemeral', x.450^inv((~me_sk.228*x.451)), je_ae_pk.233>, x.447)
+        z     = x.450^(~s_sk.230*inv((~me_sk.228*x.451)))
+        z.1   = x.450^inv(x.451)
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, pk(x.447)>,
+                       nr_pk.235)
+        z.3   = true
+    
+    53. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^(x.451*inv(~me_sk.228))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sign(<'ephemeral', x.450^(x.451*inv(~me_sk.228)), je_ae_pk.233>, x.447)
+        z     = x.450^(~s_sk.230*x.451*inv(~me_sk.228))
+        z.1   = x.450^x.451
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, pk(x.447)>,
+                       nr_pk.235)
+        z.3   = true
+    
+    54. ~me_sk
+              = ~me_sk.228
+        ~s_sk = ~s_sk.230
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.232
+        je_ae_pk
+              = je_ae_pk.233
+        je_dh_pk
+              = x.450^(x.451*inv((~me_sk.228*~s_sk.230)))
+        nr_pk = nr_pk.235
+        sig_j_pk
+              = sig_j_pk.236
+        sig_je_pk
+              = sign(<'ephemeral', x.450^(x.451*inv((~me_sk.228*~s_sk.230))), 
+                      je_ae_pk.233>,
+                     x.447)
+        z     = x.450^(x.451*inv(~me_sk.228))
+        z.1   = x.450^(x.451*inv(~s_sk.230))
+        z.2   = verify(sig_j_pk.236, <'signature', j_dh_pk.232, pk(x.447)>,
+                       nr_pk.235)
+        z.3   = true
+    
+    55. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~me_sk.229
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.450^(x.451*inv((~me_sk.229*x.452)))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, j_ae_pk.232>, x.453)
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.450^(x.451*inv(x.452))
+        z.1   = x.450^(x.451*inv(x.452))
+        z.2   = true
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.450^(x.451*inv((~me_sk.229*x.452))), je_ae_pk.234>,
+                       j_ae_pk.232)
+    
+    56. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~me_sk.229
+        j_ae_pk
+              = pk(x.447)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.450^(x.451*inv((~me_sk.229*x.452)))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, pk(x.447)>, x.453)
+        sig_je_pk
+              = sign(<'ephemeral', x.450^(x.451*inv((~me_sk.229*x.452))), je_ae_pk.234
+                     >,
+                     x.447)
+        z     = x.450^(x.451*inv(x.452))
+        z.1   = x.450^(x.451*inv(x.452))
+        z.2   = true
+        z.3   = true
+    
+    57. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^inv((~me_sk.229*~s_sk.231*x.452))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, j_ae_pk.232>, x.453)
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^inv((~me_sk.229*x.452))
+        z.1   = x.451^inv((~s_sk.231*x.452))
+        z.2   = true
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^inv((~me_sk.229*~s_sk.231*x.452)), je_ae_pk.234>,
+                       j_ae_pk.232)
+    
+    58. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^inv((~me_sk.229*x.452))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, j_ae_pk.232>, x.453)
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^(~s_sk.231*inv((~me_sk.229*x.452)))
+        z.1   = x.451^inv(x.452)
+        z.2   = true
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^inv((~me_sk.229*x.452)), je_ae_pk.234>, j_ae_pk.232)
+    
+    59. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv(~me_sk.229))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, j_ae_pk.232>, x.453)
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^(~s_sk.231*x.452*inv(~me_sk.229))
+        z.1   = x.451^x.452
+        z.2   = true
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^(x.452*inv(~me_sk.229)), je_ae_pk.234>, j_ae_pk.232)
+    
+    60. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*~s_sk.231)))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, j_ae_pk.232>, x.453)
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^(x.452*inv(~me_sk.229))
+        z.1   = x.451^(x.452*inv(~s_sk.231))
+        z.2   = true
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^(x.452*inv((~me_sk.229*~s_sk.231))), je_ae_pk.234>,
+                       j_ae_pk.232)
+    
+    61. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*~s_sk.231*x.453)))
+        nr_pk = nr_pk.236
+        sig_j_pk
+              = sig_j_pk.237
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^(x.452*inv((~me_sk.229*x.453)))
+        z.1   = x.451^(x.452*inv((~s_sk.231*x.453)))
+        z.2   = verify(sig_j_pk.237, <'signature', j_dh_pk.233, j_ae_pk.232>,
+                       nr_pk.236)
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^(x.452*inv((~me_sk.229*~s_sk.231*x.453))), 
+                        je_ae_pk.234>,
+                       j_ae_pk.232)
+    
+    62. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = j_ae_pk.232
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*x.453)))
+        nr_pk = nr_pk.236
+        sig_j_pk
+              = sig_j_pk.237
+        sig_je_pk
+              = sig_je_pk.238
+        z     = x.451^(~s_sk.231*x.452*inv((~me_sk.229*x.453)))
+        z.1   = x.451^(x.452*inv(x.453))
+        z.2   = verify(sig_j_pk.237, <'signature', j_dh_pk.233, j_ae_pk.232>,
+                       nr_pk.236)
+        z.3   = verify(sig_je_pk.238,
+                       <'ephemeral', x.451^(x.452*inv((~me_sk.229*x.453))), je_ae_pk.234>,
+                       j_ae_pk.232)
+    
+    63. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^inv((~me_sk.229*~s_sk.231*x.452))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, pk(x.448)>, x.453)
+        sig_je_pk
+              = sign(<'ephemeral', x.451^inv((~me_sk.229*~s_sk.231*x.452)), 
+                      je_ae_pk.234>,
+                     x.448)
+        z     = x.451^inv((~me_sk.229*x.452))
+        z.1   = x.451^inv((~s_sk.231*x.452))
+        z.2   = true
+        z.3   = true
+    
+    64. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^inv((~me_sk.229*x.452))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, pk(x.448)>, x.453)
+        sig_je_pk
+              = sign(<'ephemeral', x.451^inv((~me_sk.229*x.452)), je_ae_pk.234>, x.448)
+        z     = x.451^(~s_sk.231*inv((~me_sk.229*x.452)))
+        z.1   = x.451^inv(x.452)
+        z.2   = true
+        z.3   = true
+    
+    65. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv(~me_sk.229))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, pk(x.448)>, x.453)
+        sig_je_pk
+              = sign(<'ephemeral', x.451^(x.452*inv(~me_sk.229)), je_ae_pk.234>, x.448)
+        z     = x.451^(~s_sk.231*x.452*inv(~me_sk.229))
+        z.1   = x.451^x.452
+        z.2   = true
+        z.3   = true
+    
+    66. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*~s_sk.231)))
+        nr_pk = pk(x.453)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.233, pk(x.448)>, x.453)
+        sig_je_pk
+              = sign(<'ephemeral', x.451^(x.452*inv((~me_sk.229*~s_sk.231))), 
+                      je_ae_pk.234>,
+                     x.448)
+        z     = x.451^(x.452*inv(~me_sk.229))
+        z.1   = x.451^(x.452*inv(~s_sk.231))
+        z.2   = true
+        z.3   = true
+    
+    67. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*~s_sk.231*x.453)))
+        nr_pk = nr_pk.236
+        sig_j_pk
+              = sig_j_pk.237
+        sig_je_pk
+              = sign(<'ephemeral', x.451^(x.452*inv((~me_sk.229*~s_sk.231*x.453))), 
+                      je_ae_pk.234>,
+                     x.448)
+        z     = x.451^(x.452*inv((~me_sk.229*x.453)))
+        z.1   = x.451^(x.452*inv((~s_sk.231*x.453)))
+        z.2   = verify(sig_j_pk.237, <'signature', j_dh_pk.233, pk(x.448)>,
+                       nr_pk.236)
+        z.3   = true
+    
+    68. ~me_sk
+              = ~me_sk.229
+        ~s_sk = ~s_sk.231
+        j_ae_pk
+              = pk(x.448)
+        j_dh_pk
+              = j_dh_pk.233
+        je_ae_pk
+              = je_ae_pk.234
+        je_dh_pk
+              = x.451^(x.452*inv((~me_sk.229*x.453)))
+        nr_pk = nr_pk.236
+        sig_j_pk
+              = sig_j_pk.237
+        sig_je_pk
+              = sign(<'ephemeral', x.451^(x.452*inv((~me_sk.229*x.453))), je_ae_pk.234
+                     >,
+                     x.448)
+        z     = x.451^(~s_sk.231*x.452*inv((~me_sk.229*x.453)))
+        z.1   = x.451^(x.452*inv(x.453))
+        z.2   = verify(sig_j_pk.237, <'signature', j_dh_pk.233, pk(x.448)>,
+                       nr_pk.236)
+        z.3   = true
+    
+    69. ~me_sk
+              = ~me_sk.230
+        ~s_sk = ~s_sk.232
+        j_ae_pk
+              = j_ae_pk.233
+        j_dh_pk
+              = j_dh_pk.234
+        je_ae_pk
+              = je_ae_pk.235
+        je_dh_pk
+              = x.452^(x.453*inv((~me_sk.230*~s_sk.232*x.454)))
+        nr_pk = pk(x.455)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.234, j_ae_pk.233>, x.455)
+        sig_je_pk
+              = sig_je_pk.239
+        z     = x.452^(x.453*inv((~me_sk.230*x.454)))
+        z.1   = x.452^(x.453*inv((~s_sk.232*x.454)))
+        z.2   = true
+        z.3   = verify(sig_je_pk.239,
+                       <'ephemeral', x.452^(x.453*inv((~me_sk.230*~s_sk.232*x.454))), 
+                        je_ae_pk.235>,
+                       j_ae_pk.233)
+    
+    70. ~me_sk
+              = ~me_sk.230
+        ~s_sk = ~s_sk.232
+        j_ae_pk
+              = j_ae_pk.233
+        j_dh_pk
+              = j_dh_pk.234
+        je_ae_pk
+              = je_ae_pk.235
+        je_dh_pk
+              = x.452^(x.453*inv((~me_sk.230*x.454)))
+        nr_pk = pk(x.455)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.234, j_ae_pk.233>, x.455)
+        sig_je_pk
+              = sig_je_pk.239
+        z     = x.452^(~s_sk.232*x.453*inv((~me_sk.230*x.454)))
+        z.1   = x.452^(x.453*inv(x.454))
+        z.2   = true
+        z.3   = verify(sig_je_pk.239,
+                       <'ephemeral', x.452^(x.453*inv((~me_sk.230*x.454))), je_ae_pk.235>,
+                       j_ae_pk.233)
+    
+    71. ~me_sk
+              = ~me_sk.230
+        ~s_sk = ~s_sk.232
+        j_ae_pk
+              = pk(x.449)
+        j_dh_pk
+              = j_dh_pk.234
+        je_ae_pk
+              = je_ae_pk.235
+        je_dh_pk
+              = x.452^(x.453*inv((~me_sk.230*~s_sk.232*x.454)))
+        nr_pk = pk(x.455)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.234, pk(x.449)>, x.455)
+        sig_je_pk
+              = sign(<'ephemeral', x.452^(x.453*inv((~me_sk.230*~s_sk.232*x.454))), 
+                      je_ae_pk.235>,
+                     x.449)
+        z     = x.452^(x.453*inv((~me_sk.230*x.454)))
+        z.1   = x.452^(x.453*inv((~s_sk.232*x.454)))
+        z.2   = true
+        z.3   = true
+    
+    72. ~me_sk
+              = ~me_sk.230
+        ~s_sk = ~s_sk.232
+        j_ae_pk
+              = pk(x.449)
+        j_dh_pk
+              = j_dh_pk.234
+        je_ae_pk
+              = je_ae_pk.235
+        je_dh_pk
+              = x.452^(x.453*inv((~me_sk.230*x.454)))
+        nr_pk = pk(x.455)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.234, pk(x.449)>, x.455)
+        sig_je_pk
+              = sign(<'ephemeral', x.452^(x.453*inv((~me_sk.230*x.454))), je_ae_pk.235
+                     >,
+                     x.449)
+        z     = x.452^(~s_sk.232*x.453*inv((~me_sk.230*x.454)))
+        z.1   = x.452^(x.453*inv(x.454))
+        z.2   = true
+        z.3   = true
+    
+    73. j_ae_pk
+              = j_ae_pk.29
+        j_dh_pk
+              = j_dh_pk.30
+        je_ae_pk
+              = je_ae_pk.31
+        je_dh_pk
+              = DH_neutral
+        nr_pk = nr_pk.33
+        sig_j_pk
+              = sig_j_pk.34
+        sig_je_pk
+              = sig_je_pk.35
+        z     = DH_neutral
+        z.1   = DH_neutral
+        z.2   = verify(sig_j_pk.34, <'signature', j_dh_pk.30, j_ae_pk.29>,
+                       nr_pk.33)
+        z.3   = verify(sig_je_pk.35, <'ephemeral', DH_neutral, je_ae_pk.31>,
+                       j_ae_pk.29)
+    
+    74. j_ae_pk
+              = j_ae_pk.221
+        j_dh_pk
+              = j_dh_pk.222
+        je_ae_pk
+              = je_ae_pk.223
+        je_dh_pk
+              = DH_neutral
+        nr_pk = pk(x.434)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.222, j_ae_pk.221>, x.434)
+        sig_je_pk
+              = sig_je_pk.227
+        z     = DH_neutral
+        z.1   = DH_neutral
+        z.2   = true
+        z.3   = verify(sig_je_pk.227, <'ephemeral', DH_neutral, je_ae_pk.223>,
+                       j_ae_pk.221)
+    
+    75. j_ae_pk
+              = pk(x.425)
+        j_dh_pk
+              = j_dh_pk.217
+        je_ae_pk
+              = je_ae_pk.218
+        je_dh_pk
+              = DH_neutral
+        nr_pk = nr_pk.220
+        sig_j_pk
+              = sig_j_pk.221
+        sig_je_pk
+              = sign(<'ephemeral', DH_neutral, je_ae_pk.218>, x.425)
+        z     = DH_neutral
+        z.1   = DH_neutral
+        z.2   = verify(sig_j_pk.221, <'signature', j_dh_pk.217, pk(x.425)>,
+                       nr_pk.220)
+        z.3   = true
+    
+    76. j_ae_pk
+              = pk(x.428)
+        j_dh_pk
+              = j_dh_pk.220
+        je_ae_pk
+              = je_ae_pk.221
+        je_dh_pk
+              = DH_neutral
+        nr_pk = pk(x.431)
+        sig_j_pk
+              = sign(<'signature', j_dh_pk.220, pk(x.428)>, x.431)
+        sig_je_pk
+              = sign(<'ephemeral', DH_neutral, je_ae_pk.221>, x.428)
+        z     = DH_neutral
+        z.1   = DH_neutral
+        z.2   = true
+        z.3   = true
+  */
+
+rule (modulo E) Journalist_Recv[color=#6495ed]:
+   [
+   In( <
+        senc(<'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>,
+             hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>)), 
+        aenc(<'s_pk', s_dh_pk, me_pk>, pk(~je_sk))>
+   ),
+   !Journalist_Ephemeral_Key( $J, ~je_sk ), !Journalist_Enrolled( $NR, $J )
+   ]
+  --[
+  DHElement_Check( hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>) ),
+  OnlyOnce( <$J, ~je_sk> ),
+  Symmetric_Encryption_IN( <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>,
+                           hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>)
+  ),
+  Journalist_Received( $J, <'g'^~je_sk, pk(~je_sk)>, $NR, s_dh_pk,
+                       <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>
+  )
+  ]->
+   [ Journalist_Recv( $J, $NR, <s_dh_pk, s_ae_pk>, msg ) ]
+
+  /*
+  rule (modulo AC) Journalist_Recv[color=#6495ed]:
+     [
+     In( <senc(<'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>, hkdf(<z, z.1>)), 
+          aenc(<'s_pk', s_dh_pk, me_pk>, pk(~je_sk))>
+     ),
+     !Journalist_Ephemeral_Key( $J, ~je_sk ), !Journalist_Enrolled( $NR, $J )
+     ]
+    --[
+    DHElement_Check( hkdf(<z, z.1>) ), OnlyOnce( <$J, ~je_sk> ),
+    Symmetric_Encryption_IN( <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>,
+                             hkdf(<z, z.1>)
+    ),
+    Journalist_Received( $J, <'g'^~je_sk, pk(~je_sk)>, $NR, s_dh_pk,
+                         <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>
+    )
+    ]->
+     [ Journalist_Recv( $J, $NR, <s_dh_pk, s_ae_pk>, msg ) ]
+    variants (modulo AC)
+     1. ~je_sk
+              = ~je_sk.13
+        me_pk = me_pk.14
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = me_pk.14^~je_sk.13
+    
+     2. ~je_sk
+              = ~je_sk.16
+        me_pk = me_pk.17
+        s_dh_pk
+              = s_dh_pk.20
+        z     = s_dh_pk.20^~je_sk.16
+        z.1   = me_pk.17^~je_sk.16
+    
+     3. ~je_sk
+              = ~je_sk.16
+        me_pk = DH_neutral
+        s_dh_pk
+              = s_dh_pk.20
+        z     = s_dh_pk.20^~je_sk.16
+        z.1   = DH_neutral
+    
+     4. ~je_sk
+              = ~je_sk.18
+        me_pk = me_pk.19
+        s_dh_pk
+              = z.24^inv(~je_sk.18)
+        z     = z.24
+        z.1   = me_pk.19^~je_sk.18
+    
+     5. ~je_sk
+              = ~je_sk.18
+        me_pk = DH_neutral
+        s_dh_pk
+              = z.24^inv(~je_sk.18)
+        z     = z.24
+        z.1   = DH_neutral
+    
+     6. ~je_sk
+              = ~je_sk.19
+        me_pk = z.26^inv(~je_sk.19)
+        s_dh_pk
+              = s_dh_pk.23
+        z     = s_dh_pk.23^~je_sk.19
+        z.1   = z.26
+    
+     7. ~je_sk
+              = ~je_sk.19
+        me_pk = z.26^inv(~je_sk.19)
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = z.26
+    
+     8. ~je_sk
+              = ~je_sk.19
+        me_pk = z.26^inv(~je_sk.19)
+        s_dh_pk
+              = z.25^inv(~je_sk.19)
+        z     = z.25
+        z.1   = z.26
+    
+     9. ~je_sk
+              = ~je_sk.74
+        me_pk = me_pk.75
+        s_dh_pk
+              = x.143^x.144
+        z     = x.143^(~je_sk.74*x.144)
+        z.1   = me_pk.75^~je_sk.74
+    
+    10. ~je_sk
+              = ~je_sk.74
+        me_pk = DH_neutral
+        s_dh_pk
+              = x.143^x.144
+        z     = x.143^(~je_sk.74*x.144)
+        z.1   = DH_neutral
+    
+    11. ~je_sk
+              = ~je_sk.74
+        me_pk = x.143^x.144
+        s_dh_pk
+              = s_dh_pk.78
+        z     = s_dh_pk.78^~je_sk.74
+        z.1   = x.143^(~je_sk.74*x.144)
+    
+    12. ~je_sk
+              = ~je_sk.74
+        me_pk = x.143^x.144
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = x.143^(~je_sk.74*x.144)
+    
+    13. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^x.146
+        s_dh_pk
+              = z.81^inv(~je_sk.75)
+        z     = z.81
+        z.1   = x.145^(~je_sk.75*x.146)
+    
+    14. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^inv((~je_sk.75*x.146))
+        s_dh_pk
+              = s_dh_pk.79
+        z     = s_dh_pk.79^~je_sk.75
+        z.1   = x.145^inv(x.146)
+    
+    15. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^inv((~je_sk.75*x.146))
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = x.145^inv(x.146)
+    
+    16. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^inv((~je_sk.75*x.146))
+        s_dh_pk
+              = z.81^inv(~je_sk.75)
+        z     = z.81
+        z.1   = x.145^inv(x.146)
+    
+    17. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^(x.146*inv(~je_sk.75))
+        s_dh_pk
+              = s_dh_pk.79
+        z     = s_dh_pk.79^~je_sk.75
+        z.1   = x.145^x.146
+    
+    18. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^(x.146*inv(~je_sk.75))
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = x.145^x.146
+    
+    19. ~je_sk
+              = ~je_sk.75
+        me_pk = x.145^(x.146*inv(~je_sk.75))
+        s_dh_pk
+              = z.81^inv(~je_sk.75)
+        z     = z.81
+        z.1   = x.145^x.146
+    
+    20. ~je_sk
+              = ~je_sk.76
+        me_pk = x.146^(x.147*inv((~je_sk.76*x.148)))
+        s_dh_pk
+              = s_dh_pk.80
+        z     = s_dh_pk.80^~je_sk.76
+        z.1   = x.146^(x.147*inv(x.148))
+    
+    21. ~je_sk
+              = ~je_sk.76
+        me_pk = x.146^(x.147*inv((~je_sk.76*x.148)))
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = x.146^(x.147*inv(x.148))
+    
+    22. ~je_sk
+              = ~je_sk.76
+        me_pk = x.146^(x.147*inv((~je_sk.76*x.148)))
+        s_dh_pk
+              = z.82^inv(~je_sk.76)
+        z     = z.82
+        z.1   = x.146^(x.147*inv(x.148))
+    
+    23. ~je_sk
+              = ~je_sk.77
+        me_pk = DH_neutral
+        s_dh_pk
+              = x.149^inv((~je_sk.77*x.150))
+        z     = x.149^inv(x.150)
+        z.1   = DH_neutral
+    
+    24. ~je_sk
+              = ~je_sk.77
+        me_pk = DH_neutral
+        s_dh_pk
+              = x.149^(x.150*inv(~je_sk.77))
+        z     = x.149^x.150
+        z.1   = DH_neutral
+    
+    25. ~je_sk
+              = ~je_sk.78
+        me_pk = me_pk.79
+        s_dh_pk
+              = x.151^inv((~je_sk.78*x.152))
+        z     = x.151^inv(x.152)
+        z.1   = me_pk.79^~je_sk.78
+    
+    26. ~je_sk
+              = ~je_sk.78
+        me_pk = me_pk.79
+        s_dh_pk
+              = x.151^(x.152*inv(~je_sk.78))
+        z     = x.151^x.152
+        z.1   = me_pk.79^~je_sk.78
+    
+    27. ~je_sk
+              = ~je_sk.78
+        me_pk = DH_neutral
+        s_dh_pk
+              = x.150^(x.151*inv((~je_sk.78*x.152)))
+        z     = x.150^(x.151*inv(x.152))
+        z.1   = DH_neutral
+    
+    28. ~je_sk
+              = ~je_sk.78
+        me_pk = z.85^inv(~je_sk.78)
+        s_dh_pk
+              = x.151^x.152
+        z     = x.151^(~je_sk.78*x.152)
+        z.1   = z.85
+    
+    29. ~je_sk
+              = ~je_sk.78
+        me_pk = z.85^inv(~je_sk.78)
+        s_dh_pk
+              = x.151^inv((~je_sk.78*x.152))
+        z     = x.151^inv(x.152)
+        z.1   = z.85
+    
+    30. ~je_sk
+              = ~je_sk.78
+        me_pk = z.85^inv(~je_sk.78)
+        s_dh_pk
+              = x.151^(x.152*inv(~je_sk.78))
+        z     = x.151^x.152
+        z.1   = z.85
+    
+    31. ~je_sk
+              = ~je_sk.78
+        me_pk = x.147^x.148
+        s_dh_pk
+              = x.151^x.152
+        z     = x.151^(~je_sk.78*x.152)
+        z.1   = x.147^(~je_sk.78*x.148)
+    
+    32. ~je_sk
+              = ~je_sk.79
+        me_pk = me_pk.80
+        s_dh_pk
+              = x.152^(x.153*inv((~je_sk.79*x.154)))
+        z     = x.152^(x.153*inv(x.154))
+        z.1   = me_pk.80^~je_sk.79
+    
+    33. ~je_sk
+              = ~je_sk.79
+        me_pk = z.86^inv(~je_sk.79)
+        s_dh_pk
+              = x.152^(x.153*inv((~je_sk.79*x.154)))
+        z     = x.152^(x.153*inv(x.154))
+        z.1   = z.86
+    
+    34. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^x.150
+        s_dh_pk
+              = x.153^inv((~je_sk.79*x.154))
+        z     = x.153^inv(x.154)
+        z.1   = x.149^(~je_sk.79*x.150)
+    
+    35. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^x.150
+        s_dh_pk
+              = x.153^(x.154*inv(~je_sk.79))
+        z     = x.153^x.154
+        z.1   = x.149^(~je_sk.79*x.150)
+    
+    36. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^inv((~je_sk.79*x.150))
+        s_dh_pk
+              = x.153^x.154
+        z     = x.153^(~je_sk.79*x.154)
+        z.1   = x.149^inv(x.150)
+    
+    37. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^inv((~je_sk.79*x.150))
+        s_dh_pk
+              = x.153^inv((~je_sk.79*x.154))
+        z     = x.153^inv(x.154)
+        z.1   = x.149^inv(x.150)
+    
+    38. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^inv((~je_sk.79*x.150))
+        s_dh_pk
+              = x.153^(x.154*inv(~je_sk.79))
+        z     = x.153^x.154
+        z.1   = x.149^inv(x.150)
+    
+    39. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^(x.150*inv(~je_sk.79))
+        s_dh_pk
+              = x.153^x.154
+        z     = x.153^(~je_sk.79*x.154)
+        z.1   = x.149^x.150
+    
+    40. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^(x.150*inv(~je_sk.79))
+        s_dh_pk
+              = x.153^inv((~je_sk.79*x.154))
+        z     = x.153^inv(x.154)
+        z.1   = x.149^x.150
+    
+    41. ~je_sk
+              = ~je_sk.79
+        me_pk = x.149^(x.150*inv(~je_sk.79))
+        s_dh_pk
+              = x.153^(x.154*inv(~je_sk.79))
+        z     = x.153^x.154
+        z.1   = x.149^x.150
+    
+    42. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^x.151
+        s_dh_pk
+              = x.154^(x.155*inv((~je_sk.80*x.156)))
+        z     = x.154^(x.155*inv(x.156))
+        z.1   = x.150^(~je_sk.80*x.151)
+    
+    43. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^inv((~je_sk.80*x.151))
+        s_dh_pk
+              = x.154^(x.155*inv((~je_sk.80*x.156)))
+        z     = x.154^(x.155*inv(x.156))
+        z.1   = x.150^inv(x.151)
+    
+    44. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^(x.151*inv(~je_sk.80))
+        s_dh_pk
+              = x.154^(x.155*inv((~je_sk.80*x.156)))
+        z     = x.154^(x.155*inv(x.156))
+        z.1   = x.150^x.151
+    
+    45. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^(x.151*inv((~je_sk.80*x.152)))
+        s_dh_pk
+              = x.155^x.156
+        z     = x.155^(~je_sk.80*x.156)
+        z.1   = x.150^(x.151*inv(x.152))
+    
+    46. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^(x.151*inv((~je_sk.80*x.152)))
+        s_dh_pk
+              = x.155^inv((~je_sk.80*x.156))
+        z     = x.155^inv(x.156)
+        z.1   = x.150^(x.151*inv(x.152))
+    
+    47. ~je_sk
+              = ~je_sk.80
+        me_pk = x.150^(x.151*inv((~je_sk.80*x.152)))
+        s_dh_pk
+              = x.155^(x.156*inv(~je_sk.80))
+        z     = x.155^x.156
+        z.1   = x.150^(x.151*inv(x.152))
+    
+    48. ~je_sk
+              = ~je_sk.81
+        me_pk = x.151^(x.152*inv((~je_sk.81*x.153)))
+        s_dh_pk
+              = x.156^(x.157*inv((~je_sk.81*x.158)))
+        z     = x.156^(x.157*inv(x.158))
+        z.1   = x.151^(x.152*inv(x.153))
+    
+    49. me_pk = DH_neutral
+        s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = DH_neutral
+  */
+
+rule (modulo E) Journalist_Send[color=#6495ed]:
+   [
+   Journalist_Recv( $J, $NR, <s_dh_pk, s_ae_pk>, msg_old ),
+   !Ltk_Journalist_Signing( $J, ~j_sk ), Fr( ~msg ), Fr( ~me_sk )
+   ]
+  --[
+  Symmetric_Encryption_OUT( <'msg_j2s', ~msg, 'g'^~j_sk>,
+                            hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)
+  ),
+  Journalist_Sent( $J, s_dh_pk, <'msg_j2s', ~msg, 'g'^~j_sk> )
+  ]->
+   [
+   Out( <
+         senc(<'msg_j2s', ~msg, 'g'^~j_sk>,
+              hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)), 
+         aenc(<'j_pk', 'g'^~j_sk, 'g'^~me_sk>, s_ae_pk)>
+   )
+   ]
+
+  /*
+  rule (modulo AC) Journalist_Send[color=#6495ed]:
+     [
+     Journalist_Recv( $J, $NR, <s_dh_pk, s_ae_pk>, msg_old ),
+     !Ltk_Journalist_Signing( $J, ~j_sk ), Fr( ~msg ), Fr( ~me_sk )
+     ]
+    --[
+    Symmetric_Encryption_OUT( <'msg_j2s', ~msg, 'g'^~j_sk>, hkdf(<z, z.1>) ),
+    Journalist_Sent( $J, s_dh_pk, <'msg_j2s', ~msg, 'g'^~j_sk> )
+    ]->
+     [
+     Out( <senc(<'msg_j2s', ~msg, 'g'^~j_sk>, hkdf(<z, z.1>)), 
+           aenc(<'j_pk', 'g'^~j_sk, 'g'^~me_sk>, s_ae_pk)>
+     )
+     ]
+    variants (modulo AC)
+     1. ~j_sk = ~j_sk.19
+        ~me_sk
+              = ~me_sk.20
+        s_dh_pk
+              = s_dh_pk.24
+        z     = s_dh_pk.24^~j_sk.19
+        z.1   = s_dh_pk.24^~me_sk.20
+    
+     2. ~j_sk = ~j_sk.22
+        ~me_sk
+              = ~j_sk.22
+        s_dh_pk
+              = z.30^inv(~j_sk.22)
+        z     = z.30
+        z.1   = z.30
+    
+     3. ~j_sk = ~j_sk.22
+        ~me_sk
+              = ~me_sk.23
+        s_dh_pk
+              = z.30^inv(~j_sk.22)
+        z     = z.30
+        z.1   = z.30^(~me_sk.23*inv(~j_sk.22))
+    
+     4. ~j_sk = ~j_sk.23
+        ~me_sk
+              = ~me_sk.24
+        s_dh_pk
+              = z.32^inv(~me_sk.24)
+        z     = z.32^(~j_sk.23*inv(~me_sk.24))
+        z.1   = z.32
+    
+     5. ~j_sk = ~j_sk.159
+        ~me_sk
+              = ~me_sk.160
+        s_dh_pk
+              = x.313^x.314
+        z     = x.313^(~j_sk.159*x.314)
+        z.1   = x.313^(~me_sk.160*x.314)
+    
+     6. ~j_sk = ~j_sk.163
+        ~me_sk
+              = ~j_sk.163
+        s_dh_pk
+              = x.321^inv((~j_sk.163*x.322))
+        z     = x.321^inv(x.322)
+        z.1   = x.321^inv(x.322)
+    
+     7. ~j_sk = ~j_sk.163
+        ~me_sk
+              = ~j_sk.163
+        s_dh_pk
+              = x.321^(x.322*inv(~j_sk.163))
+        z     = x.321^x.322
+        z.1   = x.321^x.322
+    
+     8. ~j_sk = ~j_sk.163
+        ~me_sk
+              = ~me_sk.164
+        s_dh_pk
+              = x.321^inv((~me_sk.164*x.322))
+        z     = x.321^(~j_sk.163*inv((~me_sk.164*x.322)))
+        z.1   = x.321^inv(x.322)
+    
+     9. ~j_sk = ~j_sk.163
+        ~me_sk
+              = ~me_sk.164
+        s_dh_pk
+              = x.321^(x.322*inv(~me_sk.164))
+        z     = x.321^(~j_sk.163*x.322*inv(~me_sk.164))
+        z.1   = x.321^x.322
+    
+    10. ~j_sk = ~j_sk.163
+        ~me_sk
+              = ~me_sk.164
+        s_dh_pk
+              = x.322^inv((~j_sk.163*~me_sk.164))
+        z     = x.322^inv(~me_sk.164)
+        z.1   = x.322^inv(~j_sk.163)
+    
+    11. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~j_sk.164
+        s_dh_pk
+              = x.322^(x.323*inv((~j_sk.164*x.324)))
+        z     = x.322^(x.323*inv(x.324))
+        z.1   = x.322^(x.323*inv(x.324))
+    
+    12. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~me_sk.165
+        s_dh_pk
+              = x.322^(x.323*inv((~me_sk.165*x.324)))
+        z     = x.322^(~j_sk.164*x.323*inv((~me_sk.165*x.324)))
+        z.1   = x.322^(x.323*inv(x.324))
+    
+    13. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~me_sk.165
+        s_dh_pk
+              = x.323^inv((~j_sk.164*~me_sk.165*x.324))
+        z     = x.323^inv((~me_sk.165*x.324))
+        z.1   = x.323^inv((~j_sk.164*x.324))
+    
+    14. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~me_sk.165
+        s_dh_pk
+              = x.323^inv((~j_sk.164*x.324))
+        z     = x.323^inv(x.324)
+        z.1   = x.323^(~me_sk.165*inv((~j_sk.164*x.324)))
+    
+    15. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~me_sk.165
+        s_dh_pk
+              = x.323^(x.324*inv(~j_sk.164))
+        z     = x.323^x.324
+        z.1   = x.323^(~me_sk.165*x.324*inv(~j_sk.164))
+    
+    16. ~j_sk = ~j_sk.164
+        ~me_sk
+              = ~me_sk.165
+        s_dh_pk
+              = x.323^(x.324*inv((~j_sk.164*~me_sk.165)))
+        z     = x.323^(x.324*inv(~me_sk.165))
+        z.1   = x.323^(x.324*inv(~j_sk.164))
+    
+    17. ~j_sk = ~j_sk.165
+        ~me_sk
+              = ~me_sk.166
+        s_dh_pk
+              = x.324^(x.325*inv((~j_sk.165*~me_sk.166*x.326)))
+        z     = x.324^(x.325*inv((~me_sk.166*x.326)))
+        z.1   = x.324^(x.325*inv((~j_sk.165*x.326)))
+    
+    18. ~j_sk = ~j_sk.165
+        ~me_sk
+              = ~me_sk.166
+        s_dh_pk
+              = x.324^(x.325*inv((~j_sk.165*x.326)))
+        z     = x.324^(x.325*inv(x.326))
+        z.1   = x.324^(~me_sk.166*x.325*inv((~j_sk.165*x.326)))
+    
+    19. s_dh_pk
+              = DH_neutral
+        z     = DH_neutral
+        z.1   = DH_neutral
+  */
+
+rule (modulo E) Source_Recv[color=#6495ed]:
+   [
+   In( <
+        senc(<'msg_j2s', msg, j_dh_pk>, hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>)), 
+        aenc(<'j_pk', j_dh_pk, me_pk>, pk(~s_sk))>
+   ),
+   !Ltk_Source_Encryption( $S, ~s_sk ),
+   !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> )
+   ]
+  --[
+  DHElement_Check( me_pk ), DHElement_Check( j_dh_pk ),
+  DHElement_Check( hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>) ),
+  Symmetric_Encryption_IN( <'msg_j2s', msg, j_dh_pk>,
+                           hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>)
+  ),
+  Source_Received( 'g'^~s_sk, $J, <'msg_j2s', msg, j_dh_pk> )
+  ]->
+   [ Source_Recv( $S, msg, $J ) ]
+
+  /*
+  rule (modulo AC) Source_Recv[color=#6495ed]:
+     [
+     In( <senc(<'msg_j2s', msg, j_dh_pk>, hkdf(<z, z.1>)), 
+          aenc(<'j_pk', j_dh_pk, me_pk>, pk(~s_sk))>
+     ),
+     !Ltk_Source_Encryption( $S, ~s_sk ),
+     !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> )
+     ]
+    --[
+    DHElement_Check( me_pk ), DHElement_Check( j_dh_pk ),
+    DHElement_Check( hkdf(<z, z.1>) ),
+    Symmetric_Encryption_IN( <'msg_j2s', msg, j_dh_pk>, hkdf(<z, z.1>) ),
+    Source_Received( 'g'^~s_sk, $J, <'msg_j2s', msg, j_dh_pk> )
+    ]->
+     [ Source_Recv( $S, msg, $J ) ]
+    variants (modulo AC)
+     1. ~s_sk = ~s_sk.14
+        j_dh_pk
+              = j_dh_pk.16
+        me_pk = DH_neutral
+        z     = j_dh_pk.16^~s_sk.14
+        z.1   = DH_neutral
+    
+     2. ~s_sk = ~s_sk.15
+        j_dh_pk
+              = j_dh_pk.17
+        me_pk = me_pk.18
+        z     = j_dh_pk.17^~s_sk.15
+        z.1   = me_pk.18^~s_sk.15
+    
+     3. ~s_sk = ~s_sk.15
+        j_dh_pk
+              = DH_neutral
+        me_pk = me_pk.18
+        z     = DH_neutral
+        z.1   = me_pk.18^~s_sk.15
+    
+     4. ~s_sk = ~s_sk.18
+        j_dh_pk
+              = z.24^inv(~s_sk.18)
+        me_pk = me_pk.21
+        z     = z.24
+        z.1   = me_pk.21^~s_sk.18
+    
+     5. ~s_sk = ~s_sk.18
+        j_dh_pk
+              = z.24^inv(~s_sk.18)
+        me_pk = DH_neutral
+        z     = z.24
+        z.1   = DH_neutral
+    
+     6. ~s_sk = ~s_sk.19
+        j_dh_pk
+              = j_dh_pk.21
+        me_pk = z.26^inv(~s_sk.19)
+        z     = j_dh_pk.21^~s_sk.19
+        z.1   = z.26
+    
+     7. ~s_sk = ~s_sk.19
+        j_dh_pk
+              = DH_neutral
+        me_pk = z.26^inv(~s_sk.19)
+        z     = DH_neutral
+        z.1   = z.26
+    
+     8. ~s_sk = ~s_sk.19
+        j_dh_pk
+              = z.25^inv(~s_sk.19)
+        me_pk = z.26^inv(~s_sk.19)
+        z     = z.25
+        z.1   = z.26
+    
+     9. ~s_sk = ~s_sk.74
+        j_dh_pk
+              = j_dh_pk.76
+        me_pk = x.143^x.144
+        z     = j_dh_pk.76^~s_sk.74
+        z.1   = x.143^(~s_sk.74*x.144)
+    
+    10. ~s_sk = ~s_sk.74
+        j_dh_pk
+              = DH_neutral
+        me_pk = x.143^x.144
+        z     = DH_neutral
+        z.1   = x.143^(~s_sk.74*x.144)
+    
+    11. ~s_sk = ~s_sk.74
+        j_dh_pk
+              = x.143^x.144
+        me_pk = me_pk.77
+        z     = x.143^(~s_sk.74*x.144)
+        z.1   = me_pk.77^~s_sk.74
+    
+    12. ~s_sk = ~s_sk.74
+        j_dh_pk
+              = x.143^x.144
+        me_pk = DH_neutral
+        z     = x.143^(~s_sk.74*x.144)
+        z.1   = DH_neutral
+    
+    13. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = DH_neutral
+        me_pk = x.147^inv((~s_sk.76*x.148))
+        z     = DH_neutral
+        z.1   = x.147^inv(x.148)
+    
+    14. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = DH_neutral
+        me_pk = x.147^(x.148*inv(~s_sk.76))
+        z     = DH_neutral
+        z.1   = x.147^x.148
+    
+    15. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.145^x.146
+        me_pk = x.147^x.148
+        z     = x.145^(~s_sk.76*x.146)
+        z.1   = x.147^(~s_sk.76*x.148)
+    
+    16. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^x.148
+        me_pk = z.83^inv(~s_sk.76)
+        z     = x.147^(~s_sk.76*x.148)
+        z.1   = z.83
+    
+    17. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^inv((~s_sk.76*x.148))
+        me_pk = me_pk.79
+        z     = x.147^inv(x.148)
+        z.1   = me_pk.79^~s_sk.76
+    
+    18. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^inv((~s_sk.76*x.148))
+        me_pk = DH_neutral
+        z     = x.147^inv(x.148)
+        z.1   = DH_neutral
+    
+    19. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^inv((~s_sk.76*x.148))
+        me_pk = z.83^inv(~s_sk.76)
+        z     = x.147^inv(x.148)
+        z.1   = z.83
+    
+    20. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^(x.148*inv(~s_sk.76))
+        me_pk = me_pk.79
+        z     = x.147^x.148
+        z.1   = me_pk.79^~s_sk.76
+    
+    21. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^(x.148*inv(~s_sk.76))
+        me_pk = DH_neutral
+        z     = x.147^x.148
+        z.1   = DH_neutral
+    
+    22. ~s_sk = ~s_sk.76
+        j_dh_pk
+              = x.147^(x.148*inv(~s_sk.76))
+        me_pk = z.83^inv(~s_sk.76)
+        z     = x.147^x.148
+        z.1   = z.83
+    
+    23. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = j_dh_pk.79
+        me_pk = x.149^inv((~s_sk.77*x.150))
+        z     = j_dh_pk.79^~s_sk.77
+        z.1   = x.149^inv(x.150)
+    
+    24. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = j_dh_pk.79
+        me_pk = x.149^(x.150*inv(~s_sk.77))
+        z     = j_dh_pk.79^~s_sk.77
+        z.1   = x.149^x.150
+    
+    25. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = DH_neutral
+        me_pk = x.148^(x.149*inv((~s_sk.77*x.150)))
+        z     = DH_neutral
+        z.1   = x.148^(x.149*inv(x.150))
+    
+    26. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = z.83^inv(~s_sk.77)
+        me_pk = x.149^x.150
+        z     = z.83
+        z.1   = x.149^(~s_sk.77*x.150)
+    
+    27. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = z.83^inv(~s_sk.77)
+        me_pk = x.149^inv((~s_sk.77*x.150))
+        z     = z.83
+        z.1   = x.149^inv(x.150)
+    
+    28. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = z.83^inv(~s_sk.77)
+        me_pk = x.149^(x.150*inv(~s_sk.77))
+        z     = z.83
+        z.1   = x.149^x.150
+    
+    29. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = x.148^(x.149*inv((~s_sk.77*x.150)))
+        me_pk = me_pk.80
+        z     = x.148^(x.149*inv(x.150))
+        z.1   = me_pk.80^~s_sk.77
+    
+    30. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = x.148^(x.149*inv((~s_sk.77*x.150)))
+        me_pk = DH_neutral
+        z     = x.148^(x.149*inv(x.150))
+        z.1   = DH_neutral
+    
+    31. ~s_sk = ~s_sk.77
+        j_dh_pk
+              = x.148^(x.149*inv((~s_sk.77*x.150)))
+        me_pk = z.84^inv(~s_sk.77)
+        z     = x.148^(x.149*inv(x.150))
+        z.1   = z.84
+    
+    32. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = j_dh_pk.80
+        me_pk = x.150^(x.151*inv((~s_sk.78*x.152)))
+        z     = j_dh_pk.80^~s_sk.78
+        z.1   = x.150^(x.151*inv(x.152))
+    
+    33. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = z.84^inv(~s_sk.78)
+        me_pk = x.150^(x.151*inv((~s_sk.78*x.152)))
+        z     = z.84
+        z.1   = x.150^(x.151*inv(x.152))
+    
+    34. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^x.150
+        me_pk = x.151^inv((~s_sk.78*x.152))
+        z     = x.149^(~s_sk.78*x.150)
+        z.1   = x.151^inv(x.152)
+    
+    35. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^x.150
+        me_pk = x.151^(x.152*inv(~s_sk.78))
+        z     = x.149^(~s_sk.78*x.150)
+        z.1   = x.151^x.152
+    
+    36. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^inv((~s_sk.78*x.150))
+        me_pk = x.151^x.152
+        z     = x.149^inv(x.150)
+        z.1   = x.151^(~s_sk.78*x.152)
+    
+    37. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^inv((~s_sk.78*x.150))
+        me_pk = x.151^inv((~s_sk.78*x.152))
+        z     = x.149^inv(x.150)
+        z.1   = x.151^inv(x.152)
+    
+    38. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^inv((~s_sk.78*x.150))
+        me_pk = x.151^(x.152*inv(~s_sk.78))
+        z     = x.149^inv(x.150)
+        z.1   = x.151^x.152
+    
+    39. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^(x.150*inv(~s_sk.78))
+        me_pk = x.151^x.152
+        z     = x.149^x.150
+        z.1   = x.151^(~s_sk.78*x.152)
+    
+    40. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^(x.150*inv(~s_sk.78))
+        me_pk = x.151^inv((~s_sk.78*x.152))
+        z     = x.149^x.150
+        z.1   = x.151^inv(x.152)
+    
+    41. ~s_sk = ~s_sk.78
+        j_dh_pk
+              = x.149^(x.150*inv(~s_sk.78))
+        me_pk = x.151^(x.152*inv(~s_sk.78))
+        z     = x.149^x.150
+        z.1   = x.151^x.152
+    
+    42. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^x.151
+        me_pk = x.152^(x.153*inv((~s_sk.79*x.154)))
+        z     = x.150^(~s_sk.79*x.151)
+        z.1   = x.152^(x.153*inv(x.154))
+    
+    43. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^inv((~s_sk.79*x.151))
+        me_pk = x.152^(x.153*inv((~s_sk.79*x.154)))
+        z     = x.150^inv(x.151)
+        z.1   = x.152^(x.153*inv(x.154))
+    
+    44. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^(x.151*inv(~s_sk.79))
+        me_pk = x.152^(x.153*inv((~s_sk.79*x.154)))
+        z     = x.150^x.151
+        z.1   = x.152^(x.153*inv(x.154))
+    
+    45. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^(x.151*inv((~s_sk.79*x.152)))
+        me_pk = x.153^x.154
+        z     = x.150^(x.151*inv(x.152))
+        z.1   = x.153^(~s_sk.79*x.154)
+    
+    46. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^(x.151*inv((~s_sk.79*x.152)))
+        me_pk = x.153^inv((~s_sk.79*x.154))
+        z     = x.150^(x.151*inv(x.152))
+        z.1   = x.153^inv(x.154)
+    
+    47. ~s_sk = ~s_sk.79
+        j_dh_pk
+              = x.150^(x.151*inv((~s_sk.79*x.152)))
+        me_pk = x.153^(x.154*inv(~s_sk.79))
+        z     = x.150^(x.151*inv(x.152))
+        z.1   = x.153^x.154
+    
+    48. ~s_sk = ~s_sk.80
+        j_dh_pk
+              = x.151^(x.152*inv((~s_sk.80*x.153)))
+        me_pk = x.154^(x.155*inv((~s_sk.80*x.156)))
+        z     = x.151^(x.152*inv(x.153))
+        z.1   = x.154^(x.155*inv(x.156))
+    
+    49. j_dh_pk
+              = DH_neutral
+        me_pk = DH_neutral
+        z     = DH_neutral
+        z.1   = DH_neutral
+  */
+
+restriction Eq:
+  "∀ t1 t2 #x. (Eq( t1, t2 ) @ #x) ⇒ (t1 = t2)"
+  // safety formula
+
+restriction DHElement_Check:
+  "∀ x #t. (DHElement_Check( x ) @ #t) ⇒ (¬((x = 'g') ∨ (x = DH_neutral)))"
+  // safety formula
+
+restriction OnlyOnce:
+  "∀ x #i #j. ((OnlyOnce( x ) @ #i) ∧ (OnlyOnce( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+lemma Auto_Symmetric_Encryption [sources]:
+  all-traces
+  "∀ m key #t.
+    (Symmetric_Encryption_IN( m, key ) @ #t) ⇒
+    (((∃ #x. (!KU( m ) @ #x) ∧ (#x < #t)) ∧
+      (∃ #x. (!KU( key ) @ #x) ∧ (#x < #t))) ∨
+     (∃ #x. (Symmetric_Encryption_OUT( m, key ) @ #x) ∧ (#x < #t)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ m key #t.
+  (Symmetric_Encryption_IN( m, key ) @ #t)
+ ∧
+  (((∀ #x. (!KU( m ) @ #x) ⇒ ¬(#x < #t)) ∨
+    (∀ #x. (!KU( key ) @ #x) ⇒ ¬(#x < #t)))) ∧
+  (∀ #x. (Symmetric_Encryption_OUT( m, key ) @ #x) ⇒ ¬(#x < #t))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  simplify
+  solve( (∀ #x. (!KU( m ) @ #x) ⇒ ¬(#x < #t))  ∥
+         (∀ #x. (!KU( key ) @ #x) ⇒ ¬(#x < #t)) )
+    case case_1
+    solve( (last(#t))  ∥
+           ((∃ #x. (!KU( m ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)) ∧
+            (∃ #x. (!KU( key ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)))  ∥
+           (∃ #x.
+             (Symmetric_Encryption_OUT( m, key ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)) )
+      case case_1
+      solve( Symmetric_Encryption_IN( m, key ) @ #t )
+        case Journalist_Recv
+        solve( !Journalist_Ephemeral_Key( $J, ~je_sk ) ▶₁ #t )
+          case Journalist_Register_Ephemeral_Key
+          solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t )
+            case Journalist_Enrollment
+            solve( !KU( senc(<'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>,
+                             hkdf(<z, z.1>))
+                   ) @ #vk.1 )
+              case Source_Send
+              by contradiction /* from formulas */
+            next
+              case c_senc
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      next
+        case Source_Recv
+        solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₁ #t )
+          case Register_Source_Encryption_Key
+          solve( !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ) ▶₂ #t )
+            case Journalist_Enrollment
+            solve( !KU( senc(<'msg_j2s', msg, 'g'^~j_sk>,
+                             hkdf(<'g'^(~j_sk*~s_sk), z>))
+                   ) @ #vk.1 )
+              case Journalist_Send
+              by contradiction /* from formulas */
+            next
+              case c_senc
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  next
+    case case_2
+    solve( (last(#t))  ∥
+           ((∃ #x. (!KU( m ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)) ∧
+            (∃ #x. (!KU( key ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)))  ∥
+           (∃ #x.
+             (Symmetric_Encryption_OUT( m, key ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)) )
+      case case_1
+      solve( Symmetric_Encryption_IN( m, key ) @ #t )
+        case Journalist_Recv
+        solve( !Journalist_Ephemeral_Key( $J, ~je_sk ) ▶₁ #t )
+          case Journalist_Register_Ephemeral_Key
+          solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t )
+            case Journalist_Enrollment
+            solve( !KU( senc(<'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>,
+                             hkdf(<z, z.1>))
+                   ) @ #vk.1 )
+              case Source_Send
+              by contradiction /* from formulas */
+            next
+              case c_senc
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      next
+        case Source_Recv
+        solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₁ #t )
+          case Register_Source_Encryption_Key
+          solve( !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ) ▶₂ #t )
+            case Journalist_Enrollment
+            solve( !KU( senc(<'msg_j2s', msg, 'g'^~j_sk>,
+                             hkdf(<'g'^(~j_sk*~s_sk), z>))
+                   ) @ #vk.1 )
+              case Journalist_Send
+              by contradiction /* from formulas */
+            next
+              case c_senc
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      qed
+    next
+      case case_2
+      by contradiction /* from formulas */
+    next
+      case case_3
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma Auto_Executability_Submission:
+  exists-trace
+  "∃ #t1 #t2 s_pk j je_pk nr m.
+    ((Source_Sent( s_pk, j, je_pk, nr, m ) @ #t1) ∧
+     (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t2)) ∧
+    (¬(∃ #x. SomeCompromise( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 s_pk j je_pk nr m.
+  (Source_Sent( s_pk, j, je_pk, nr, m ) @ #t1) ∧
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t2)
+ ∧
+  ∀ #x. (SomeCompromise( ) @ #x) ⇒ ⊥"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₀ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t1 )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, <j_dh_pk, pk(x)> ) ▶₂ #t1 )
+      case Journalist_Enrollment
+      solve( !Journalist_Ephemeral_Key( $J, ~je_sk ) ▶₁ #t2 )
+        case Journalist_Register_Ephemeral_Key
+        solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t2 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk) ) @ #vk.5 )
+            case Journalist_Enrollment
+            solve( !KU( senc(<'msg_s2j', ~msg, 'g'^~s_sk, pk(~s_sk), $J, $NR>,
+                             hkdf(<'g'^(~je_sk*~s_sk), z>))
+                   ) @ #vk.12 )
+              case Source_Send
+              solve( !KU( sign(<'ephemeral', 'g'^~je_sk, pk(~je_sk)>, ~j_sk)
+                     ) @ #vk.11 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !KU( aenc(<'s_pk', 'g'^~s_sk, 'g'^~me_sk>, pk(~je_sk))
+                       ) @ #vk.13 )
+                  case Source_Send
+                  solve( !KU( pk(~j_sk) ) @ #vk.10 )
+                    case Journalist_Enrollment
+                    solve( !KU( 'g'^~je_sk ) @ #vk.12 )
+                      case Journalist_Register_Ephemeral_Key
+                      solve( !KU( pk(~je_sk) ) @ #vk.13 )
+                        case Journalist_Register_Ephemeral_Key
+                        solve( !KU( 'g'^~j_sk ) @ #vk.13 )
+                          case Journalist_Enrollment
+                          SOLVED // trace found
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Executability_Journalist_Response:
+  exists-trace
+  "∃ #t1 #t2 s_pk j_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Source_Received( s_pk, j_pk, m ) @ #t2)) ∧
+    (¬(∃ #x. SomeCompromise( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 s_pk j_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Source_Received( s_pk, j_pk, m ) @ #t2)
+ ∧
+  ∀ #x. (SomeCompromise( ) @ #x) ⇒ ⊥"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, <'g'^~s_sk, s_ae_pk>, msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, ~j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₁ #t2 )
+      case Register_Source_Encryption_Key
+      solve( !Pk_Journalist_Signing( $J, <'g'^~j_sk, j_ae_pk> ) ▶₂ #t2 )
+        case Journalist_Enrollment
+        solve( !KU( senc(<'msg_j2s', ~msg, 'g'^~j_sk>,
+                         hkdf(<'g'^(~j_sk*~s_sk), z>))
+               ) @ #vk.1 )
+          case Journalist_Send
+          solve( !KU( aenc(<'j_pk', 'g'^~j_sk, 'g'^~me_sk>, pk(~s_sk)) ) @ #vk.2 )
+            case Journalist_Send
+            solve( !KU( senc(<'msg_s2j', msg_old, 'g'^~s_sk, pk(~s_sk), $J, $NR>,
+                             hkdf(<'g'^(~je_sk*~s_sk), z>))
+                   ) @ #vk.4 )
+              case Source_Send
+              solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk) ) @ #vk.11 )
+                case Journalist_Enrollment
+                solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.16 )
+                  case Journalist_Register_Ephemeral_Key
+                  solve( !KU( aenc(<'s_pk', 'g'^~s_sk, 'g'^~me_sk.1>, pk(~je_sk))
+                         ) @ #vk.8 )
+                    case Source_Send
+                    solve( !KU( 'g'^~j_sk ) @ #vk.12 )
+                      case Journalist_Enrollment
+                      solve( !KU( pk(~j_sk) ) @ #vk.13 )
+                        case Journalist_Enrollment
+                        solve( !KU( 'g'^~je_sk ) @ #vk.15 )
+                          case Journalist_Register_Ephemeral_Key
+                          solve( !KU( pk(~je_sk) ) @ #vk.16 )
+                            case Journalist_Register_Ephemeral_Key
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Secrecy_Source_Message:
+  all-traces
+  "∀ #t s j je_pk nr m.
+    (Source_Sent( s, j, je_pk, nr, m ) @ #t) ⇒
+    ((((¬(∃ #x. K( m ) @ #x)) ∨
+       (∃ #x. Reveal_Journalist_Signing_Key( j ) @ #x)) ∨
+      (∃ #x. Reveal_Newsroom_Key( nr ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t s j je_pk nr m.
+  (Source_Sent( s, j, je_pk, nr, m ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₀ #t )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, <j_dh_pk, pk(x)> ) ▶₂ #t )
+      case Journalist_Enrollment
+      solve( !KU( ~msg ) @ #vk.14 )
+        case Source_Send
+        solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk) ) @ #vk.7 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'ephemeral', je_dh_pk, je_ae_pk>, ~j_sk) ) @ #vk.14 )
+            case Journalist_Register_Ephemeral_Key
+            solve( !KU( 'g'^(~je_sk*~s_sk) ) @ #vk.24 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( ~s_sk ) @ #vk.26 )
+                case Reveal_Source_Encryption_Key
+                solve( !KU( 'g'^(~je_sk*~me_sk) ) @ #vk.26 )
+                  case Journalist_Register_Ephemeral_Key
+                  by solve( !KU( ~me_sk ) @ #vk.27 )
+                next
+                  case Source_Send
+                  solve( !KU( ~je_sk ) @ #vk.27 )
+                    case Reveal_Journalist_Ephemeral_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case c_exp
+                  solve( !KU( ~je_sk ) @ #vk.29 )
+                    case Reveal_Journalist_Ephemeral_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              qed
+            next
+              case Register_Source_Encryption_Key
+              solve( !KU( ~je_sk ) @ #vk.26 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case Source_Send_case_1
+              solve( !KU( ~je_sk ) @ #vk.38 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case Source_Send_case_2
+              solve( !KU( ~je_sk ) @ #vk.38 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case c_exp
+              solve( !KU( ~je_sk ) @ #vk.28 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.27 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~ltk ) @ #vk.27 )
+            case Reveal_Newsroom_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_PFS_Source_Message:
+  all-traces
+  "∀ #t s j je_pk nr m.
+    (Source_Sent( s, j, je_pk, nr, m ) @ #t) ⇒
+    ((((¬(∃ #x. K( m ) @ #x)) ∨
+       (∃ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ∧ (#x < #t))) ∨
+      (∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t))) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t s j je_pk nr m.
+  (Source_Sent( s, j, je_pk, nr, m ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₀ #t )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Newsroom( $NR, pk(x) ) ▶₁ #t )
+    case Register_Newsroom_Key
+    solve( !Pk_Journalist_Signing( $J, <j_dh_pk, pk(x)> ) ▶₂ #t )
+      case Journalist_Enrollment
+      solve( !KU( ~msg ) @ #vk.14 )
+        case Source_Send
+        solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk) ) @ #vk.7 )
+          case Journalist_Enrollment
+          solve( !KU( sign(<'ephemeral', je_dh_pk, je_ae_pk>, ~j_sk) ) @ #vk.14 )
+            case Journalist_Register_Ephemeral_Key
+            solve( !KU( 'g'^(~je_sk*~s_sk) ) @ #vk.24 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( ~s_sk ) @ #vk.26 )
+                case Reveal_Source_Encryption_Key
+                solve( !KU( 'g'^(~je_sk*~me_sk) ) @ #vk.26 )
+                  case Journalist_Register_Ephemeral_Key
+                  by solve( !KU( ~me_sk ) @ #vk.27 )
+                next
+                  case Source_Send
+                  solve( !KU( ~je_sk ) @ #vk.27 )
+                    case Reveal_Journalist_Ephemeral_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case c_exp
+                  solve( !KU( ~je_sk ) @ #vk.29 )
+                    case Reveal_Journalist_Ephemeral_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              qed
+            next
+              case Register_Source_Encryption_Key
+              solve( !KU( ~je_sk ) @ #vk.26 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case Source_Send_case_1
+              solve( !KU( ~je_sk ) @ #vk.38 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case Source_Send_case_2
+              solve( !KU( ~je_sk ) @ #vk.38 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            next
+              case c_exp
+              solve( !KU( ~je_sk ) @ #vk.28 )
+                case Reveal_Journalist_Ephemeral_Key
+                by contradiction /* from formulas */
+              qed
+            qed
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.27 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~ltk ) @ #vk.27 )
+            case Reveal_Newsroom_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Secrecy_Journalist_Message:
+  all-traces
+  "∀ #t1 #t2 j_pk s_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((¬(∃ #x. K( m ) @ #x)) ∨
+     (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j_pk s_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, <'g'^~ltk, s_ae_pk>, msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, ~j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( ~msg ) @ #vk.3 )
+      case Journalist_Send
+      solve( !KU( 'g'^(~j_sk*~ltk) ) @ #vk.10 )
+        case Journalist_Enrollment
+        solve( !KU( ~ltk ) @ #vk.12 )
+          case Reveal_Source_Encryption_Key
+          by contradiction /* from formulas */
+        qed
+      next
+        case Journalist_Send_case_1
+        solve( !KU( ~ltk ) @ #vk.13 )
+          case Reveal_Source_Encryption_Key
+          by contradiction /* from formulas */
+        qed
+      next
+        case Journalist_Send_case_2
+        solve( !KU( ~ltk ) @ #vk.13 )
+          case Reveal_Source_Encryption_Key
+          by contradiction /* from formulas */
+        qed
+      next
+        case Register_Source_Encryption_Key
+        solve( !KU( ~j_sk ) @ #vk.12 )
+          case Reveal_Journalist_Signing_Key
+          solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.12 )
+            case Journalist_Send
+            solve( !KU( ~ltk ) @ #vk.14 )
+              case Reveal_Source_Encryption_Key
+              by contradiction /* from formulas */
+            qed
+          next
+            case Register_Source_Encryption_Key
+            by solve( !KU( ~me_sk ) @ #vk.13 )
+          next
+            case c_exp
+            solve( !KU( ~ltk ) @ #vk.15 )
+              case Reveal_Source_Encryption_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      next
+        case Source_Send_case_1
+        solve( !KU( ~j_sk ) @ #vk.24 )
+          case Reveal_Journalist_Signing_Key
+          solve( !KU( sign(<'signature', 'g'^~j_sk.1, pk(~j_sk.1)>, ~ltk.1)
+                 ) @ #vk.19 )
+            case Journalist_Enrollment
+            solve( !KU( sign(<'ephemeral', je_dh_pk, je_ae_pk>, ~j_sk.1) ) @ #vk.24 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.16 )
+                case Journalist_Send
+                solve( !KU( ~ltk ) @ #vk.29 )
+                  case Reveal_Source_Encryption_Key
+                  by contradiction /* from formulas */
+                qed
+              next
+                case Source_Send
+                by solve( !KU( ~me_sk ) @ #vk.28 )
+              next
+                case c_exp
+                solve( !KU( ~ltk ) @ #vk.30 )
+                  case Reveal_Source_Encryption_Key
+                  by contradiction /* from formulas */
+                qed
+              qed
+            next
+              case c_sign
+              solve( !KU( ~j_sk.1 ) @ #vk.29 )
+                case Reveal_Journalist_Signing_Key
+                solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.19 )
+                  case Journalist_Send
+                  solve( !KU( ~ltk ) @ #vk.32 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case Source_Send
+                  by solve( !KU( ~me_sk ) @ #vk.31 )
+                next
+                  case c_exp
+                  solve( !KU( ~ltk ) @ #vk.33 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              qed
+            qed
+          next
+            case c_sign
+            solve( !KU( ~ltk.1 ) @ #vk.29 )
+              case Reveal_Newsroom_Key
+              solve( !KU( sign(<'ephemeral', je_dh_pk, je_ae_pk>, ~j_sk.1) ) @ #vk.26 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.18 )
+                  case Journalist_Send
+                  solve( !KU( ~ltk ) @ #vk.32 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case Source_Send
+                  by solve( !KU( ~me_sk ) @ #vk.31 )
+                next
+                  case c_exp
+                  solve( !KU( ~ltk ) @ #vk.33 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              next
+                case c_sign
+                solve( !KU( ~j_sk.1 ) @ #vk.32 )
+                  case Reveal_Journalist_Signing_Key
+                  solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.20 )
+                    case Journalist_Send
+                    solve( !KU( ~ltk ) @ #vk.35 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  next
+                    case Source_Send
+                    by solve( !KU( ~me_sk ) @ #vk.34 )
+                  next
+                    case c_exp
+                    solve( !KU( ~ltk ) @ #vk.36 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case Source_Send_case_2
+        solve( !KU( ~j_sk ) @ #vk.24 )
+          case Reveal_Journalist_Signing_Key
+          solve( !KU( sign(<'signature', 'g'^~j_sk.1, pk(~j_sk.1)>, ~ltk.1)
+                 ) @ #vk.18 )
+            case Journalist_Enrollment
+            solve( !KU( sign(<'ephemeral', je_dh_pk, pk(x.1)>, ~j_sk.1) ) @ #vk.23 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !KU( ~je_sk.1 ) @ #vk.24 )
+                case Reveal_Journalist_Ephemeral_Key
+                solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.18 )
+                  case Journalist_Send
+                  solve( !KU( ~ltk ) @ #vk.26 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case Source_Send
+                  by solve( !KU( ~me_sk ) @ #vk.25 )
+                next
+                  case c_exp
+                  solve( !KU( ~ltk ) @ #vk.27 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              qed
+            next
+              case c_sign
+              solve( !KU( ~j_sk.1 ) @ #vk.26 )
+                case Reveal_Journalist_Signing_Key
+                solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.18 )
+                  case Journalist_Send
+                  solve( !KU( ~ltk ) @ #vk.29 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                next
+                  case Source_Send
+                  by solve( !KU( ~me_sk ) @ #vk.28 )
+                next
+                  case c_exp
+                  solve( !KU( ~ltk ) @ #vk.30 )
+                    case Reveal_Source_Encryption_Key
+                    by contradiction /* from formulas */
+                  qed
+                qed
+              qed
+            qed
+          next
+            case c_sign
+            solve( !KU( ~ltk.1 ) @ #vk.26 )
+              case Reveal_Newsroom_Key
+              solve( !KU( sign(<'ephemeral', je_dh_pk, pk(x.1)>, ~j_sk.1) ) @ #vk.25 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !KU( ~je_sk.1 ) @ #vk.26 )
+                  case Reveal_Journalist_Ephemeral_Key
+                  solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.19 )
+                    case Journalist_Send
+                    solve( !KU( ~ltk ) @ #vk.29 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  next
+                    case Source_Send
+                    by solve( !KU( ~me_sk ) @ #vk.28 )
+                  next
+                    case c_exp
+                    solve( !KU( ~ltk ) @ #vk.30 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  qed
+                qed
+              next
+                case c_sign
+                solve( !KU( ~j_sk.1 ) @ #vk.29 )
+                  case Reveal_Journalist_Signing_Key
+                  solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.19 )
+                    case Journalist_Send
+                    solve( !KU( ~ltk ) @ #vk.32 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  next
+                    case Source_Send
+                    by solve( !KU( ~me_sk ) @ #vk.31 )
+                  next
+                    case c_exp
+                    solve( !KU( ~ltk ) @ #vk.33 )
+                      case Reveal_Source_Encryption_Key
+                      by contradiction /* from formulas */
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      next
+        case c_exp
+        solve( !KU( ~j_sk ) @ #vk.14 )
+          case Reveal_Journalist_Signing_Key
+          solve( !KU( ~ltk ) @ #vk.15 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_PFS_Journalist_Message:
+  all-traces
+  "∀ #t1 #t2 j_pk s_pk m.
+    ((Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((¬(∃ #x. K( m ) @ #x)) ∨
+     (∃ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ∧ (#x < #t1)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j_pk s_pk m.
+  (Journalist_Sent( j_pk, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ¬(#x < #t1))"
+*/
+simplify
+solve( Journalist_Recv( $J, $NR, <'g'^~ltk, s_ae_pk>, msg_old ) ▶₀ #t1 )
+  case Journalist_Recv
+  solve( !Ltk_Journalist_Signing( $J, ~j_sk ) ▶₁ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( ~msg ) @ #vk.3 )
+      case Journalist_Send
+      solve( !KU( 'g'^(~j_sk*~ltk) ) @ #vk.10 )
+        case Journalist_Enrollment
+        solve( !KU( ~ltk ) @ #vk.12 )
+          case Reveal_Source_Encryption_Key
+          solve( !KU( 'g'^(~ltk*~me_sk) ) @ #vk.12 )
+            case Journalist_Send
+            solve( !KU( senc(<'msg_s2j', msg_old, 'g'^~ltk, pk(x), $J, $NR>,
+                             hkdf(<'g'^(~je_sk*~ltk), z>))
+                   ) @ #vk.11 )
+              case Source_Send
+              solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk.1)
+                     ) @ #vk.17 )
+                case Journalist_Enrollment
+                solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.22 )
+                  case Journalist_Register_Ephemeral_Key
+                  solve( !KU( 'g'^~j_sk ) @ #vk.14 )
+                    case Journalist_Enrollment
+                    solve( !KU( aenc(<'s_pk', 'g'^~ltk, 'g'^~me_sk.1>, pk(~je_sk))
+                           ) @ #vk.18 )
+                      case Source_Send
+                      solve( !KU( pk(~j_sk) ) @ #vk.19 )
+                        case Journalist_Enrollment
+                        solve( !KU( 'g'^~je_sk ) @ #vk.21 )
+                          case Journalist_Register_Ephemeral_Key
+                          solve( !KU( pk(~je_sk) ) @ #vk.22 )
+                            case Journalist_Register_Ephemeral_Key
+                            SOLVED // trace found
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Non_Injective_Agreement_Source_Message:
+  all-traces
+  "∀ #t1 #t2 j je_pk nr s_pk m.
+    ((Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((((∃ #x. (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x) ∧ (#x < #t1)) ∨
+       (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+      (∃ #x. Reveal_Journalist_Signing_Key( j ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j je_pk nr s_pk m.
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∀ #x. (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x) ⇒ ¬(#x < #t1)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Journalist_Ephemeral_Key( $J, ~je_sk ) ▶₁ #t1 )
+  case Journalist_Register_Ephemeral_Key
+  solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( senc(<'msg_s2j', msg, 'g'^~ltk, s_ae_pk, $J, $NR>,
+                     hkdf(<'g'^(~je_sk*~ltk), z>))
+           ) @ #vk.1 )
+      case Source_Send
+      solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk.1) ) @ #vk.8 )
+        case Journalist_Enrollment
+        solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.13 )
+          case Journalist_Register_Ephemeral_Key
+          by contradiction /* from formulas */
+        next
+          case c_sign
+          solve( !KU( ~j_sk ) @ #vk.15 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case c_sign
+        solve( !KU( ~ltk.1 ) @ #vk.15 )
+          case Reveal_Newsroom_Key
+          solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.15 )
+            case Journalist_Register_Ephemeral_Key
+            by contradiction /* from formulas */
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.18 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      qed
+    next
+      case c_senc
+      solve( !KU( hkdf(<'g'^(~je_sk*~ltk), z>) ) @ #vk.4 )
+        case c_hkdf
+        solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.16 )
+          case Journalist_Register_Ephemeral_Key
+          solve( !KU( ~ltk ) @ #vk.18 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Register_Source_Encryption_Key
+          solve( !KU( ~je_sk ) @ #vk.18 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_1
+          solve( !KU( ~je_sk ) @ #vk.30 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_2
+          solve( !KU( ~je_sk ) @ #vk.30 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case c_exp
+          solve( !KU( ~je_sk ) @ #vk.20 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Injective_Agreement_Source_Message:
+  all-traces
+  "∀ #t1 #t2 j je_pk nr s_pk m.
+    ((Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+     (Register_Source( s_pk ) @ #t2)) ⇒
+    ((((∃ #x1.
+         ((Source_Sent( s_pk, j, je_pk, nr, m ) @ #x1) ∧ (#x1 < #t1)) ∧
+         (¬(∃ j_2 je_pk_2 nr_2 s_pk_2 #x2.
+             (Journalist_Received( j_2, je_pk_2, nr_2, s_pk_2, m ) @ #x2) ∧
+             (¬(#x2 = #t1))))) ∨
+       (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+      (∃ #x. Reveal_Journalist_Signing_Key( j ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 #t2 j je_pk nr s_pk m.
+  (Journalist_Received( j, je_pk, nr, s_pk, m ) @ #t1) ∧
+  (Register_Source( s_pk ) @ #t2)
+ ∧
+  (∀ #x1.
+    (Source_Sent( s_pk, j, je_pk, nr, m ) @ #x1)
+   ⇒
+    ((¬(#x1 < #t1)) ∨
+     (∃ j_2 je_pk_2 nr_2 s_pk_2 #x2.
+       (Journalist_Received( j_2, je_pk_2, nr_2, s_pk_2, m ) @ #x2)
+      ∧
+       ¬(#x2 = #t1)))) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Ephemeral_Key( je_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Journalist_Ephemeral_Key( $J, ~je_sk ) ▶₁ #t1 )
+  case Journalist_Register_Ephemeral_Key
+  solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( senc(<'msg_s2j', msg, 'g'^~ltk, s_ae_pk, $J, $NR>,
+                     hkdf(<'g'^(~je_sk*~ltk), z>))
+           ) @ #vk.1 )
+      case Source_Send
+      solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk.1) ) @ #vk.8 )
+        case Journalist_Enrollment
+        solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.13 )
+          case Journalist_Register_Ephemeral_Key
+          solve( (#x2 < #t1)  ∥ (#t1 < #x2) )
+            case case_1
+            solve( !Journalist_Ephemeral_Key( $J, ~je_sk.1 ) ▶₁ #x2 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #x2 )
+                case Journalist_Enrollment
+                solve( !KU( senc(<'msg_s2j', ~msg, 'g'^~ltk, pk(~ltk), $J, $NR>,
+                                 hkdf(<'g'^(~ltk*~je_sk.1), z>))
+                       ) @ #vk.15 )
+                  case Source_Send
+                  by contradiction /* cyclic */
+                next
+                  case c_senc
+                  solve( !KU( ~msg ) @ #vk.21 )
+                    case Source_Send
+                    solve( !KU( hkdf(<'g'^(~ltk*~je_sk.1), z>) ) @ #vk.20 )
+                      case c_hkdf
+                      solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.31 )
+                        case Journalist_Register_Ephemeral_Key
+                        solve( !KU( ~ltk ) @ #vk.36 )
+                          case Reveal_Source_Encryption_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Register_Source_Encryption_Key
+                        solve( !KU( ~je_sk ) @ #vk.36 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Source_Send_case_1
+                        solve( !KU( ~je_sk ) @ #vk.48 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Source_Send_case_2
+                        solve( !KU( ~je_sk ) @ #vk.48 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case c_exp
+                        solve( !KU( ~je_sk ) @ #vk.38 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          next
+            case case_2
+            solve( !Journalist_Ephemeral_Key( $J, ~je_sk.1 ) ▶₁ #x2 )
+              case Journalist_Register_Ephemeral_Key
+              solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #x2 )
+                case Journalist_Enrollment
+                solve( !KU( senc(<'msg_s2j', ~msg, 'g'^~ltk, pk(~ltk), $J, $NR>,
+                                 hkdf(<'g'^(~ltk*~je_sk.1), z>))
+                       ) @ #vk.15 )
+                  case Source_Send
+                  by contradiction /* cyclic */
+                next
+                  case c_senc
+                  solve( !KU( ~msg ) @ #vk.21 )
+                    case Source_Send
+                    solve( !KU( hkdf(<'g'^(~ltk*~je_sk.1), z>) ) @ #vk.20 )
+                      case c_hkdf
+                      solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.31 )
+                        case Journalist_Register_Ephemeral_Key
+                        solve( !KU( ~ltk ) @ #vk.36 )
+                          case Reveal_Source_Encryption_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Register_Source_Encryption_Key
+                        solve( !KU( ~je_sk ) @ #vk.36 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Source_Send_case_1
+                        solve( !KU( ~je_sk ) @ #vk.48 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case Source_Send_case_2
+                        solve( !KU( ~je_sk ) @ #vk.48 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      next
+                        case c_exp
+                        solve( !KU( ~je_sk ) @ #vk.38 )
+                          case Reveal_Journalist_Ephemeral_Key
+                          by contradiction /* from formulas */
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        next
+          case c_sign
+          solve( !KU( ~j_sk ) @ #vk.15 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      next
+        case c_sign
+        solve( !KU( ~ltk.1 ) @ #vk.15 )
+          case Reveal_Newsroom_Key
+          solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.15 )
+            case Journalist_Register_Ephemeral_Key
+            solve( (#x2 < #t1)  ∥ (#t1 < #x2) )
+              case case_1
+              solve( !Journalist_Ephemeral_Key( $J, ~je_sk.1 ) ▶₁ #x2 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #x2 )
+                  case Journalist_Enrollment
+                  solve( !KU( senc(<'msg_s2j', ~msg, 'g'^~ltk, pk(~ltk), $J, $NR>,
+                                   hkdf(<'g'^(~ltk*~je_sk.1), z>))
+                         ) @ #vk.18 )
+                    case Source_Send
+                    by contradiction /* cyclic */
+                  next
+                    case c_senc
+                    solve( !KU( ~msg ) @ #vk.24 )
+                      case Source_Send
+                      solve( !KU( hkdf(<'g'^(~ltk*~je_sk.1), z>) ) @ #vk.23 )
+                        case c_hkdf
+                        solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.34 )
+                          case Journalist_Register_Ephemeral_Key
+                          solve( !KU( ~ltk ) @ #vk.39 )
+                            case Reveal_Source_Encryption_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Register_Source_Encryption_Key
+                          solve( !KU( ~je_sk ) @ #vk.39 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Source_Send_case_1
+                          solve( !KU( ~je_sk ) @ #vk.51 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Source_Send_case_2
+                          solve( !KU( ~je_sk ) @ #vk.51 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case c_exp
+                          solve( !KU( ~je_sk ) @ #vk.41 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            next
+              case case_2
+              solve( !Journalist_Ephemeral_Key( $J, ~je_sk.1 ) ▶₁ #x2 )
+                case Journalist_Register_Ephemeral_Key
+                solve( !Journalist_Enrolled( $NR, $J ) ▶₂ #x2 )
+                  case Journalist_Enrollment
+                  solve( !KU( senc(<'msg_s2j', ~msg, 'g'^~ltk, pk(~ltk), $J, $NR>,
+                                   hkdf(<'g'^(~ltk*~je_sk.1), z>))
+                         ) @ #vk.18 )
+                    case Source_Send
+                    by contradiction /* cyclic */
+                  next
+                    case c_senc
+                    solve( !KU( ~msg ) @ #vk.24 )
+                      case Source_Send
+                      solve( !KU( hkdf(<'g'^(~ltk*~je_sk.1), z>) ) @ #vk.23 )
+                        case c_hkdf
+                        solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.34 )
+                          case Journalist_Register_Ephemeral_Key
+                          solve( !KU( ~ltk ) @ #vk.39 )
+                            case Reveal_Source_Encryption_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Register_Source_Encryption_Key
+                          solve( !KU( ~je_sk ) @ #vk.39 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Source_Send_case_1
+                          solve( !KU( ~je_sk ) @ #vk.51 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case Source_Send_case_2
+                          solve( !KU( ~je_sk ) @ #vk.51 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        next
+                          case c_exp
+                          solve( !KU( ~je_sk ) @ #vk.41 )
+                            case Reveal_Journalist_Ephemeral_Key
+                            by contradiction /* from formulas */
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          next
+            case c_sign
+            solve( !KU( ~j_sk ) @ #vk.18 )
+              case Reveal_Journalist_Signing_Key
+              by contradiction /* from formulas */
+            qed
+          qed
+        qed
+      qed
+    next
+      case c_senc
+      solve( !KU( hkdf(<'g'^(~je_sk*~ltk), z>) ) @ #vk.4 )
+        case c_hkdf
+        solve( !KU( 'g'^(~je_sk*~ltk) ) @ #vk.16 )
+          case Journalist_Register_Ephemeral_Key
+          solve( !KU( ~ltk ) @ #vk.18 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Register_Source_Encryption_Key
+          solve( !KU( ~je_sk ) @ #vk.18 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_1
+          solve( !KU( ~je_sk ) @ #vk.30 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_2
+          solve( !KU( ~je_sk ) @ #vk.30 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case c_exp
+          solve( !KU( ~je_sk ) @ #vk.20 )
+            case Reveal_Journalist_Ephemeral_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Non_Injective_Agreement_Journalist_Message:
+  all-traces
+  "∀ #t1 j_pk s_pk m.
+    (Source_Received( s_pk, j_pk, m ) @ #t1) ⇒
+    (((∃ #x. (Journalist_Sent( j_pk, s_pk, m ) @ #x) ∧ (#x < #t1)) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Signing_Key( j_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 j_pk s_pk m.
+  (Source_Received( s_pk, j_pk, m ) @ #t1)
+ ∧
+  (∀ #x. (Journalist_Sent( j_pk, s_pk, m ) @ #x) ⇒ ¬(#x < #t1)) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₁ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( senc(<'msg_j2s', msg, 'g'^~j_sk>,
+                     hkdf(<'g'^(~j_sk*~s_sk), z>))
+           ) @ #vk.1 )
+      case Journalist_Send
+      by contradiction /* from formulas */
+    next
+      case c_senc
+      solve( !KU( hkdf(<'g'^(~j_sk*~s_sk), z>) ) @ #vk.4 )
+        case c_hkdf
+        solve( !KU( 'g'^(~j_sk*~s_sk) ) @ #vk.10 )
+          case Journalist_Enrollment
+          solve( !KU( ~s_sk ) @ #vk.12 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Journalist_Send_case_1
+          solve( !KU( ~s_sk ) @ #vk.13 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Journalist_Send_case_2
+          solve( !KU( ~s_sk ) @ #vk.13 )
+            case Reveal_Source_Encryption_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Register_Source_Encryption_Key
+          solve( !KU( ~j_sk ) @ #vk.12 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_1
+          solve( !KU( ~j_sk ) @ #vk.24 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case Source_Send_case_2
+          solve( !KU( ~j_sk ) @ #vk.24 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        next
+          case c_exp
+          solve( !KU( ~j_sk ) @ #vk.14 )
+            case Reveal_Journalist_Signing_Key
+            by contradiction /* from formulas */
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+lemma Auto_Injective_Agreement_Journalist_Message:
+  all-traces
+  "∀ #t1 j_pk s_pk m.
+    (Source_Received( s_pk, j_pk, m ) @ #t1) ⇒
+    (((∃ #x1.
+        ((Journalist_Sent( j_pk, s_pk, m ) @ #x1) ∧ (#x1 < #t1)) ∧
+        (¬(∃ j_pk_2 s_pk_2 #x2.
+            (Source_Received( s_pk_2, j_pk_2, m ) @ #x2) ∧ (¬(#x2 = #t1))))) ∨
+      (∃ #x. Reveal_Source_Encryption_Key( s_pk ) @ #x)) ∨
+     (∃ #x. Reveal_Journalist_Signing_Key( j_pk ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ #t1 j_pk s_pk m.
+  (Source_Received( s_pk, j_pk, m ) @ #t1)
+ ∧
+  (∀ #x1.
+    (Journalist_Sent( j_pk, s_pk, m ) @ #x1)
+   ⇒
+    ((¬(#x1 < #t1)) ∨
+     (∃ j_pk_2 s_pk_2 #x2.
+       (Source_Received( s_pk_2, j_pk_2, m ) @ #x2) ∧ ¬(#x2 = #t1)))) ∧
+  (∀ #x. (Reveal_Source_Encryption_Key( s_pk ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (Reveal_Journalist_Signing_Key( j_pk ) @ #x) ⇒ ⊥)"
+*/
+simplify
+solve( !Ltk_Source_Encryption( $S, ~s_sk ) ▶₁ #t1 )
+  case Register_Source_Encryption_Key
+  solve( !Pk_Journalist_Signing( $J, <j_dh_pk, j_ae_pk> ) ▶₂ #t1 )
+    case Journalist_Enrollment
+    solve( !KU( senc(<'msg_j2s', msg, 'g'^~j_sk>,
+                     hkdf(<'g'^(~j_sk*~s_sk), z>))
+           ) @ #vk.1 )
+      case Journalist_Send
+      solve( (#x2 < #t1)  ∥ (#t1 < #x2) )
+        case case_1
+        solve( !Ltk_Source_Encryption( $S.1, ~s_sk.1 ) ▶₁ #x2 )
+          case Register_Source_Encryption_Key
+          solve( !Pk_Journalist_Signing( $J.1, <'g'^~j_sk, j_ae_pk> ) ▶₂ #x2 )
+            case Journalist_Enrollment
+            solve( !KU( aenc(<'j_pk', 'g'^~j_sk, 'g'^~me_sk>, pk(~s_sk)) ) @ #vk.2 )
+              case Journalist_Send
+              solve( !KU( senc(<'msg_s2j', msg_old, 'g'^~s_sk, pk(~s_sk), $J, $NR>,
+                               hkdf(<'g'^(~je_sk*~s_sk), z.1>))
+                     ) @ #vk.4 )
+                case Source_Send
+                solve( !KU( sign(<'signature', 'g'^~j_sk, pk(~j_sk)>, ~ltk) ) @ #vk.14 )
+                  case Journalist_Enrollment
+                  solve( !KU( sign(<'ephemeral', 'g'^~je_sk, je_ae_pk>, ~j_sk) ) @ #vk.19 )
+                    case Journalist_Register_Ephemeral_Key
+                    solve( !KU( senc(<'msg_j2s', ~msg, 'g'^~j_sk>,
+                                     hkdf(<'g'^(~j_sk*~s_sk.1), z>))
+                           ) @ #vk.10 )
+                      case Journalist_Send
+                      solve( !KU( aenc(<'s_pk', 'g'^~s_sk, 'g'^~me_sk.1>, pk(~je_sk))
+                             ) @ #vk.10 )
+                        case Source_Send
+                        solve( !KU( 'g'^~j_sk ) @ #vk.12 )
+                          case Journalist_Enrollment
+                          solve( !KU( pk(~j_sk) ) @ #vk.13 )
+                            case Journalist_Enrollment
+                            solve( !KU( 'g'^~je_sk ) @ #vk.15 )
+                              case Journalist_Register_Ephemeral_Key
+                              solve( !KU( pk(~je_sk) ) @ #vk.16 )
+                                case Journalist_Register_Ephemeral_Key
+                                SOLVED // trace found
+                              qed
+                            qed
+                          qed
+                        qed
+                      qed
+                    qed
+                  qed
+                qed
+              qed
+            qed
+          qed
+        qed
+      qed
+    qed
+  qed
+qed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+WARNING: the following wellformedness checks failed!
+
+Derivation Checks
+=================
+
+  Derivation checks timed out.
+  Use --derivcheck-timeout=INT to configure timeout.
+  Set to 0 to deactivate for no timeout.
+*/
+
+/*
+Generated from:
+Tamarin version 1.10.0
+Maude version 3.1
+Git revision: cb62c305f8c8b8c1e664152aa33c95b7b8d5ef32, branch: master
+Compiled at: 2024-10-30 11:41:27.973633147 UTC
+*/
+
+end
