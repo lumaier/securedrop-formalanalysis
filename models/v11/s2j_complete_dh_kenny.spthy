@@ -114,7 +114,7 @@ rule Source_Send [color=#6495ED]:
       me_pk = 'g'^~me_sk
       k = hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>)
       m = <'msg_s2j', ~msg, s_dh_pk, s_ae_pk, $J, $NR>
-      enc_gs = aenc(<'s_pk', s_dh_pk, me_pk>, je_ae_pk)
+      enc_gs = aenc(<'s_pk', s_dh_pk>, je_ae_pk)
       c = senc(m, k)
   in
   [ !Ltk_Source_Encryption($S, ~s_sk)
@@ -132,7 +132,7 @@ rule Source_Send [color=#6495ED]:
     , Symmetric_Encryption_OUT(m, k)
     , Source_Sent(s_dh_pk, $J, <je_dh_pk, je_ae_pk>, $NR, m)
     ]->
-  [ Out(<c, enc_gs>) ]
+  [ Out(<c, enc_gs, me_pk>) ]
 
 rule Journalist_Recv [color=#6495ED]:
   let k = hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>)
@@ -140,7 +140,7 @@ rule Journalist_Recv [color=#6495ED]:
       je_dh_pk = 'g'^~je_sk
       je_ae_pk = pk(~je_sk)
   in
-  [ In(<senc(m, k), aenc(<'s_pk', s_dh_pk, me_pk>, pk(~je_sk))>)
+  [ In(<senc(m, k), aenc(<'s_pk', s_dh_pk>, pk(~je_sk)), me_pk>)
   , !Journalist_Ephemeral_Key($J, ~je_sk)
   , !Journalist_Enrolled($NR, $J)]
   --[ DHElement_Check(k)
@@ -157,7 +157,7 @@ rule Journalist_Send [color=#6495ED]:
       k = hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)
       m = <'msg_j2s', ~msg, j_dh_pk>
       c = senc(m, k)
-      enc_gj = aenc(<'j_pk', j_dh_pk, me_pk>, s_ae_pk)
+      enc_gj = aenc(<'j_pk', j_dh_pk>, s_ae_pk)
   in
   [ Journalist_Recv($J, $NR, <s_dh_pk, s_ae_pk>, msg_old)
   , !Ltk_Journalist_Signing($J, ~j_sk)
@@ -167,7 +167,7 @@ rule Journalist_Send [color=#6495ED]:
       Symmetric_Encryption_OUT(m, k)
     , Journalist_Sent($J, s_dh_pk, m)
     ]->
-  [ Out(<c, enc_gj>) ]
+  [ Out(<c, enc_gj, me_pk>) ]
 
 rule Source_Recv [color=#6495ED]:
   let s_dh_pk = 'g'^~s_sk
@@ -175,9 +175,9 @@ rule Source_Recv [color=#6495ED]:
       k = hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>)
       m = <'msg_j2s', msg, j_dh_pk>
   in
-  [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk, me_pk>, pk(~s_sk))>)
+  [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk>, pk(~s_sk)), me_pk>)
   , !Ltk_Source_Encryption($S, ~s_sk)
-  , !Pk_Journalist_Signing($J, <j_dh_pk, j_ae_pk>) ]
+  , !Pk_Journalist_Signing($J, j_dh_pk, j_ae_pk>) ]
   --[ DHElement_Check(me_pk)
     , DHElement_Check(j_dh_pk)
     , DHElement_Check(k)
