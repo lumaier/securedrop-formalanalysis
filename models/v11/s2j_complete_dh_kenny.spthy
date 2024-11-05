@@ -113,7 +113,7 @@ rule Source_Send [color=#6495ED]:
       s_ae_pk = pk(~s_sk)
       me_pk = 'g'^~me_sk
       k = hkdf(<je_dh_pk^~s_sk, je_dh_pk^~me_sk>)
-      m = <'msg_s2j', ~msg, s_dh_pk, s_ae_pk, $J, $NR>
+      m = <'msg_s2j', ~msg, s_ae_pk, $J, $NR>
       enc_gs = aenc(<'s_pk', s_dh_pk>, je_ae_pk)
       c = senc(m, k)
   in
@@ -136,7 +136,7 @@ rule Source_Send [color=#6495ED]:
 
 rule Journalist_Recv [color=#6495ED]:
   let k = hkdf(<s_dh_pk^~je_sk, me_pk^~je_sk>)
-      m = <'msg_s2j', msg, s_dh_pk, s_ae_pk, $J, $NR>
+      m = <'msg_s2j', msg, s_ae_pk, $J, $NR>
       je_dh_pk = 'g'^~je_sk
       je_ae_pk = pk(~je_sk)
   in
@@ -155,7 +155,7 @@ rule Journalist_Send [color=#6495ED]:
   let me_pk = 'g'^~me_sk
       j_dh_pk = 'g'^~j_sk
       k = hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)
-      m = <'msg_j2s', ~msg, j_dh_pk>
+      m = <'msg_j2s', ~msg>
       c = senc(m, k)
       enc_gj = aenc(<'j_pk', j_dh_pk>, s_ae_pk)
   in
@@ -173,11 +173,11 @@ rule Source_Recv [color=#6495ED]:
   let s_dh_pk = 'g'^~s_sk
       s_ae_pk = pk(~s_sk)
       k = hkdf(<j_dh_pk^~s_sk, me_pk^~s_sk>)
-      m = <'msg_j2s', msg, j_dh_pk>
+      m = <'msg_j2s', msg>
   in
   [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk>, pk(~s_sk)), me_pk>)
   , !Ltk_Source_Encryption($S, ~s_sk)
-  , !Pk_Journalist_Signing($J, j_dh_pk, j_ae_pk>) ]
+  , !Pk_Journalist_Signing($J, <j_dh_pk, j_ae_pk>) ]
   --[ DHElement_Check(me_pk)
     , DHElement_Check(j_dh_pk)
     , DHElement_Check(k)
