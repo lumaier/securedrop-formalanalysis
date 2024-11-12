@@ -4,7 +4,7 @@ begin
 builtins: symmetric-encryption, asymmetric-encryption, diffie-hellman, signing
 
 // KDF
-functions: hkdf/1
+functions: kdf/1
 
 /*
 
@@ -35,8 +35,8 @@ rule Reveal_Newsroom_Key [color=#FF6961]:
   [ Out(~ltk) ]
 
 rule Register_Source_Passphrase [color=#FDFD96]:
-  let s_dh_sk = hkdf(<'DH', ~passphrase>)
-      s_pke_sk = hkdf(<'PKE', ~passphrase>)
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_pke_sk = kdf(<'PKE', ~passphrase>)
       s_dh_pk = 'g'^s_dh_sk
       s_pke_pk = pk(s_pke_sk)
   in
@@ -138,12 +138,12 @@ rule Reveal_Journalist_EPKE_Key [color=#FF6961]:
 // Messaging and Fetching Protocol
 
 rule Source_Send [color=#6495ED]:
-  let s_dh_sk = hkdf(<'DH', ~passphrase>)
-      s_pke_sk = hkdf(<'PKE', ~passphrase>)
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_pke_sk = kdf(<'PKE', ~passphrase>)
       s_dh_pk = 'g'^s_dh_sk
       s_pke_pk = pk(s_pke_sk)
       me_pk = 'g'^~me_sk
-      k = hkdf(<je_dh_pk^s_dh_sk, je_dh_pk^~me_sk>)
+      k = kdf(<je_dh_pk^s_dh_sk, je_dh_pk^~me_sk>)
       m = <'msg_s2j', ~msg, s_pke_pk, j_sig_pk, $NR>
       enc_gs = aenc(<'s_pk', s_dh_pk>, je_pke_pk)
       c = senc(m, k)
@@ -166,7 +166,7 @@ rule Source_Send [color=#6495ED]:
 
 rule Journalist_Recv [color=#6495ED]:
   let j_sig_pk = pk(~j_sig_sk)
-      k = hkdf(<s_dh_pk^~je_dh_sk, me_pk^~je_dh_sk>)
+      k = kdf(<s_dh_pk^~je_dh_sk, me_pk^~je_dh_sk>)
       m = <'msg_s2j', msg, s_pke_pk, j_sig_pk, $NR>
       je_dh_pk = 'g'^~je_dh_sk
       je_pke_pk = pk(~je_pke_sk)
@@ -183,41 +183,41 @@ rule Journalist_Recv [color=#6495ED]:
     ]->
   [ Journalist_Recv($J, $NR, <s_dh_pk, s_pke_pk>, msg) ]
 
-// rule Journalist_Send [color=#6495ED]:
-//   let me_pk = 'g'^~me_sk
-//       j_dh_pk = 'g'^~j_sk
-//       k = hkdf(<s_dh_pk^~j_sk, s_dh_pk^~me_sk>)
-//       m = <'msg_j2s', ~msg>
-//       c = senc(m, k)
-//       enc_gj = aenc(<'j_pk', j_dh_pk>, s_pke_pk)
-//   in
-//   [ Journalist_Recv($J, $NR, <s_dh_pk, s_pke_pk>, msg_old)
-//   , !Ltk_Journalist_Signing($J, ~j_sk)
-//   , Fr(~msg)
-//   , Fr(~me_sk) ]
-//   --[ // Actions for Lemmas
-//       Symmetric_Encryption_OUT(m, k)
-//     , Journalist_Sent($J, s_dh_pk, m)
-//     ]->
-//   [ Out(<c, enc_gj, me_pk>) ]
+rule Journalist_Send [color=#6495ED]:
+  let k = kdf(<s_dh_pk^~j_dh_sk, s_dh_pk^~me_sk>)
+      m = <'msg_j2s', ~msg>
+      c = senc(m, k)
+      j_dh_pk = 'g'^~j_dh_sk
+      enc_gj = aenc(<'j_pk', j_dh_pk>, s_pke_pk)
+      me_pk = 'g'^~me_sk
+  in
+  [ Journalist_Recv($J, $NR, <s_dh_pk, s_pke_pk>, msg_old)
+  , !Ltk_Journalist_DH_Key($J, ~j_dh_sk)
+  , Fr(~msg)
+  , Fr(~me_sk) ]
+  --[ // Actions for Lemmas
+      Symmetric_Encryption_OUT(m, k)
+    , Journalist_Sent(j_dh_pk, s_dh_pk, m)
+    ]->
+  [ Out(<c, enc_gj, me_pk>) ]
 
-// rule Source_Recv [color=#6495ED]:
-//   let s_dh_sk = hkdf(<'DH', ~passphrase>)
-//       s_pke_sk = hkdf(<'PKE', ~passphrase>)
-//       s_dh_pk = 'g'^s_dh_sk
-//       k = hkdf(<j_dh_pk^~s_dh_sk, me_pk^~s_dh_sk>)
-//       m = <'msg_j2s', msg>
-//   in
-//   [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk>, pk(~s_pke_sk)), me_pk>)
-//   , !Ltk_Source_Passphrase($S, ~passphrase) ]
-//   --[ DHElement_Check(me_pk)
-//     , DHElement_Check(j_dh_pk)
-//     , DHElement_Check(k)
-//       // Actions for Lemmas
-//     , Symmetric_Encryption_IN(m, k)
-//     , Source_Received(s_dh_pk, $J, m)
-//     ]->
-//   [ Source_Recv($S, msg, $J) ]
+rule Source_Recv [color=#6495ED]:
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_pke_sk = kdf(<'PKE', ~passphrase>)
+      s_dh_pk = 'g'^s_dh_sk
+      k = kdf(<j_dh_pk^s_dh_sk, me_pk^s_dh_sk>)
+      m = <'msg_j2s', msg>
+  in
+  [ In(<senc(m, k), aenc(<'j_pk', j_dh_pk>, pk(s_pke_sk)), me_pk>)
+  , !Ltk_Source_Passphrase($S, ~passphrase) ]
+  --[ DHElement_Check(me_pk)
+    , DHElement_Check(j_dh_pk)
+    , DHElement_Check(k)
+      // Actions for Lemmas
+    , Symmetric_Encryption_IN(m, k)
+    , Source_Received(s_dh_pk, j_dh_pk, m)
+    ]->
+  [ Source_Recv($S, msg, $J) ]
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
@@ -246,12 +246,12 @@ exists-trace
       & Journalist_Received(j_sig_pk, je_dh_pk, je_pke_pk, nr, s_dh_pk, m) @ #t2
       & (not Ex #x. SomeCompromise() @ #x)"
 
-// lemma Auto_Executability_Journalist_Response:
-// exists-trace
-// "Ex #t1 #t2 s_pk j_pk m.
-//         Journalist_Sent(j_pk, s_pk, m) @ #t1
-//       & Source_Received(s_pk, j_pk, m) @ #t2
-//       & (not Ex #x. SomeCompromise() @ #x)"
+lemma Auto_Executability_Journalist_Response:
+exists-trace
+"Ex #t1 #t2 s_dh_pk j_dh_pk m.
+        Journalist_Sent(j_dh_pk, s_dh_pk, m) @ #t1
+      & Source_Received(s_dh_pk, j_dh_pk, m) @ #t2
+      & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Auto_Secrecy_Source_Message:
 "All #t s_dh_pk j_sig_pk je_dh_pk je_pke_pk nr m. 
@@ -269,19 +269,20 @@ lemma Auto_PFS_Source_Message:
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
 
-// lemma Auto_Secrecy_Journalist_Message:
-// "All #t1 #t2 j_pk s_pk m. 
-//         Journalist_Sent(j_pk, s_pk, m) @ #t1
-//       & Register_Source(s_pk) @ #t2
-//   ==>   (not Ex #x. K(m) @ #x)
-//       | (Ex #x. Reveal_Source_DH_Key(s_pk) @ #x)"
+// nicht automatisch verifizierbar
+lemma Secrecy_Journalist_Message:
+"All #t1 #t2 j_dh_pk s_dh_pk m. 
+        Journalist_Sent(j_dh_pk, s_dh_pk, m) @ #t1
+      & Register_Source(s_dh_pk) @ #t2
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)"
 
-// lemma Auto_PFS_Journalist_Message:
-// "All #t1 #t2 j_pk s_pk m. 
-//         Journalist_Sent(j_pk, s_pk, m) @ #t1
-//       & Register_Source(s_pk) @ #t2
+// lemma PFS_Journalist_Message:
+// "All #t1 #t2 j_dh_pk s_dh_pk m. 
+//         Journalist_Sent(j_dh_pk, s_dh_pk, m) @ #t1
+//       & Register_Source(s_dh_pk) @ #t2
 //   ==>   (not Ex #x. K(m) @ #x)
-//       | (Ex #x. Reveal_Source_DH_Key(s_pk) @ #x & #x < #t1)"
+//       | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x & #x < #t1)"
 
 lemma Auto_Non_Injective_Agreement_Source_Message:
 "All #t1 #t2 j_sig_pk je_dh_pk je_pke_pk nr s_dh_pk m. 
@@ -303,20 +304,21 @@ lemma Auto_Injective_Agreement_Source_Message:
       | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x)
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
 
-// lemma Auto_Non_Injective_Agreement_Journalist_Message:
-// "All #t1 j_pk s_pk m.
-//         Source_Received(s_pk, j_pk, m) @ #t1
-//   ==>   (Ex #x. Journalist_Sent(j_pk, s_pk, m) @ #x & #x < #t1) 
-//       | (Ex #x. Reveal_Source_DH_Key(s_pk) @ #x)
-//       | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
+// nicht automatisch verifizierbar
+lemma Non_Injective_Agreement_Journalist_Message:
+"All #t1 j_dh_pk s_dh_pk m.
+        Source_Received(s_dh_pk, j_dh_pk, m) @ #t1
+  ==>   (Ex #x. Journalist_Sent(j_dh_pk, s_dh_pk, m) @ #x & #x < #t1) 
+      | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)
+      | (Ex #x. Reveal_Journalist_DH_Key(j_dh_pk) @ #x)"
   
-// lemma Auto_Injective_Agreement_Journalist_Message:
-// "All #t1 j_pk s_pk m. 
-//         Source_Received(s_pk, j_pk, m) @ #t1
-//   ==>   (Ex #x1. Journalist_Sent(j_pk, s_pk, m) @ #x1 
+// lemma Injective_Agreement_Journalist_Message:
+// "All #t1 j_dh_pk s_dh_pk m. 
+//         Source_Received(s_dh_pk, j_dh_pk, m) @ #t1
+//   ==>   (Ex #x1. Journalist_Sent(j_dh_pk, s_dh_pk, m) @ #x1 
 //               & #x1 < #t1
-//               & not (Ex j_pk_2 s_pk_2 #x2. Source_Received(s_pk_2, j_pk_2, m) @ #x2 & not (#x2 = #t1)))
-//       | (Ex #x. Reveal_Source_DH_Key(s_pk) @ #x)
-//       | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
+//               & not (Ex j_dh_pk_2 s_dh_pk_2 #x2. Source_Received(s_dh_pk_2, j_dh_pk_2, m) @ #x2 & not (#x2 = #t1)))
+//       | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)
+//       | (Ex #x. Reveal_Journalist_DH_Key(j_dh_pk) @ #x)"
 
 end
