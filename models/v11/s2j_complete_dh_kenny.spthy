@@ -185,6 +185,10 @@ rule Reveal_Journalist_EKEM_Key [color=#FF6961]:
 // Messaging and Fetching Protocol
 
 rule Source_Send [color=#6495ED]:
+      // Not sure if it's best to alway re-derive the source's secret keys.
+      // Certainly not wrong, but leads to code-duplication (which in turn can
+      // lead to errors). You could also memorize the secret keys in
+      // !Ltk_Source_Passphrase.
   let s_dh_sk = kdf(<'DH', ~passphrase>)
       s_pke_sk = kdf(<'PKE', ~passphrase>)
       s_kem_sk = kdf(<'KEM', ~passphrase>)
@@ -208,6 +212,8 @@ rule Source_Send [color=#6495ED]:
       Eq(verify(sig_j_pk, <'signature', <j_sig_pk, j_dh_pk>>, nr_pk), true)
     , Eq(verify(sig_je_pk, <'ephemeral', <je_dh_pk, je_pke_pk, je_kem_pk>>, j_sig_pk), true)
       // sanity check of DH elements used
+    // Sanity check below is redundant: you derive k above yourself. Did you
+    // want to check a different key? (Could also be legacy.)
     , DHElement_Check(k)
       // Actions for Lemmas
     , Symmetric_Encryption_OUT(m, k)
@@ -231,12 +237,16 @@ rule Journalist_Recv [color=#6495ED]:
   , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
   , !Journalist_Enrolled($NR, $J)]
   --[ DHElement_Check(k)
+    // You can also skip this OnlyOnce and make !Journalist_Ephemeral_Key
+    // non-persistent.
     , OnlyOnce(<$J, ~je_dh_sk, ~je_pke_sk, ~je_kem_sk>)
       // Actions for Lemmas
     , Symmetric_Encryption_IN(m, k)
     , Journalist_Received(j_sig_pk, je_dh_pk, je_pke_pk, je_kem_pk, $NR, s_dh_pk, m)
     , PrePQAttack()
     ]->
+  // I would not use tuples in your own action facts unless you must; can easily
+  // lead to makes mistakes from wrong pattern-matching.
   [ Journalist_Recv($J, $NR, <s_dh_pk, s_pke_pk, s_kem_pk>, msg) ]
 
 rule Journalist_Send [color=#6495ED]:
@@ -280,6 +290,7 @@ rule Source_Recv [color=#6495ED]:
     , Source_Received(s_dh_pk, j_dh_pk, m)
     , PrePQAttack()
     ]->
+  // Unused fact.
   [ Source_Recv($S, msg, $J) ]
 
 restriction Eq:
@@ -316,8 +327,12 @@ lemma Auto_Secrecy_Source_Message:
   ==>   (not Ex #x. K(m) @ #x)
       | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x)
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)
+      // I would assume we can make the branch below stronger: Requires leak of
+      // EDH *and* KEM key, no?
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
 
+// Aha. You address this in a second lemma. I think it would be better to move
+// the `Ex. PQAttack()` part to the right side of the implication.
 lemma Auto_PQ_Secrecy_Source_Message:
 "All #t s_dh_pk j_sig_pk je_dh_pk je_pke_pk je_kem_pk nr m. 
         Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, je_pke_pk, je_kem_pk, nr, m) @ #t
@@ -327,6 +342,10 @@ lemma Auto_PQ_Secrecy_Source_Message:
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)
       | (Ex #x. Reveal_Journalist_EKEM_Key(je_kem_pk) @ #x)"
 
+// The only difference to secrecy is that you add the `#x < #t` parts. I don't
+// think that this deserves its own lemma. I think you can just use this lemma
+// for secrecy (the stronger the right side of the implication, the better) and
+// in your thesis write why your secrecy lemma implies PFS.
 lemma Auto_PFS_Source_Message:
 "All #t s_dh_pk j_sig_pk je_dh_pk je_pke_pk je_kem_pk nr m. 
         Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, je_pke_pk, je_kem_pk, nr, m) @ #t
@@ -353,7 +372,12 @@ lemma Auto_Non_Injective_Agreement_Source_Message:
       | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)
       | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x)
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
-  
+
+// You could simplify this by removing the non-injective part. You showed this
+// already. You can look at my PQ3 injectivity lemma. There we only say that
+// for all two receive events (with the respective arguments), the timepoint
+// must be the same. It follows directly from NI agreement that there also
+// exists a respective send event.
 lemma Auto_Injective_Agreement_Source_Message:
 "All #t1 #t2 j_sig_pk je_dh_pk je_pke_pk je_kem_pk nr s_dh_pk m. 
         Journalist_Received(j_sig_pk, je_dh_pk, je_pke_pk, je_kem_pk, nr, s_dh_pk, m) @ #t1
@@ -364,6 +388,9 @@ lemma Auto_Injective_Agreement_Source_Message:
       | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)
       | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x)
       | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
+
+// Some of the above comments directly apply to other lemmas too, but I guess
+// that's obvious to you :)
 
 lemma Auto_Executability_Journalist_Response:
 exists-trace
