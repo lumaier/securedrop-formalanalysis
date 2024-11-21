@@ -34,7 +34,7 @@ restriction PQAttacker:
 
 // Key Registration
 
-rule Register_Newsroom_Key [color=#FDFD96]:
+rule Register_Newsroom_Key [color=#FF7F50]:
   let public_key = pk(~ltk) in
   [ Fr(~ltk) ]
   --[ PrePQAttack() ]->
@@ -49,7 +49,7 @@ rule Reveal_Newsroom_Key [color=#FF6961]:
     , SomeCompromise() ]->
   [ Out(~ltk) ]
 
-rule Register_Source_Passphrase [color=#FDFD96]:
+rule Register_Source_Passphrase [color=#FF7F50]:
   let s_dh_sk = kdf(<'DH', ~passphrase>)
       s_pke_sk = kdf(<'PKE', ~passphrase>)
       s_kem_sk = kdf(<'KEM', ~passphrase>)
