@@ -1,0 +1,46 @@
+theory Example1
+begin
+
+builtins: asymmetric-encryption
+
+builtins: asymmetric-encryption
+
+// Registering a public-key
+rule Register_pk:
+    [ Fr(~ltk) ] --> [ !Ltk($A, ~ltk), !Pk($A, pk(~ltk)) ]
+
+// The public key is sent to the network
+rule Get_pk:
+    [ !Pk(A, pubkey) ] --> [ Out(pubkey) ]
+
+// The action fact Reveal(A) exists in a trace 
+// iff A's secret key was revealed (i.e., known by the adversary)
+rule Reveal_ltk:
+    [ !Ltk(A, ltk) ] --[ LtkReveal(A) ]-> [ Out(ltk) ]
+
+rule Sender:
+    let c = aenc(~msg, pkR) in
+    [ Fr(~msg), !Pk($R, pkR) ] --[ Sent($R, ~msg) ]-> [ Out(c) ]
+
+rule Receiver:
+    let msg = adec(c, ~ltk) in
+    [ In(c), !Ltk($R, ~ltk) ] --[ Received($R, msg) ]-> []
+
+lemma Executability:
+exists-trace
+"Ex #t1 #t2 r msg.
+        Sent(r, msg) @ #t1
+      & Received(r, msg) @ #t2
+      & #t1 < #t2
+      & (not Ex #x. LtkReveal(r) @ #x)"
+
+
+lemma Secrecy:
+all-traces
+"All #t1 #t2 r msg.
+        Sent(r, msg) @ #t1
+      & Received(r, msg) @ #t2
+  ==>  (not Ex #x. K(msg) @ #x)
+     | (Ex #x. LtkReveal(r) @ #x)"
+
+end
