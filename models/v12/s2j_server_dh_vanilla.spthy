@@ -1,0 +1,411 @@
+theory SecureDrop
+begin
+
+// heuristic: o "./oracles/s2j_server_signature.py"
+
+builtins: symmetric-encryption, signing, diffie-hellman
+
+// KDF
+functions: kdf/1
+
+/*
+
+Color semantics:
+
+- Yellow (#FDFD96)      Key setup/distribution
+- Red (#FF6961)         Adversary activity
+- Light blue (#B4D9EF)  Message Fetching
+- Dark blue (#6495ED)   Messaging
+- Orange (#FF7F50)      Registration/Enrollment
+
+ */
+
+// Channel Rules
+
+rule ClientOut[color=#FFFFFF]:
+  [ Client_Out(~sess, $Server, msg), !Message_Server($Server) ]
+  --[ Client_Sent(msg) ]->
+  [ !Client(~sess, $Server, msg) ]
+
+rule AdversaryClientOut[color=#FF6961]:
+  [ In(~sess), In(msg), !Message_Server($Server) ]
+  -->
+  [ !Client(~sess, $Server, msg) ]
+
+rule ServerOut[color=#FFFFFF]:
+  [ Server_Out(~sess, $Server, msg), !Message_Server($Server) ]
+  -->
+  [ !Server(~sess, $Server, msg) ]
+
+rule ClientToServer[color=#FFFFFF]:
+  [ !Client(~sess, $Server, msg) ]
+  -->
+  [ Server_In(~sess, $Server, msg) ]
+
+rule ServerToClient[color=#FFFFFF]:
+  [ !Server(~sess, $Server, msg) ]
+  -->
+  [ Client_In(~sess, $Server, msg) ]
+
+rule ServerToAdversaryClient[color=#FF6961]:
+  [ In(adversarySess), !Server(adversarySess, $Server, msg) ]
+  --[ AdversaryActivity()
+    , ServerToAdversary($Server, msg) ]->
+  [ Out(msg) ]
+
+// Server Rules
+
+rule Server_Ciphertext:
+  [ Server_In(~sess, $Server, <'ciphertext', c>)]
+  --[ Ciphertext_IN($Server, <'ciphertext', c>) ]->
+  [ !Stored_Ciphertext($Server, c)]
+
+rule Server_Receive_Fetch_Request:
+  [ Server_In(~sess, $Server, 'fetch_messages') ]
+  -->
+  [ Server_Fetched_Messages(~sess, $Server) ]
+
+rule Server_Create_Challenge [derivchecks]:
+  let me_pk = 'g'^~me_sk
+      kmid = m_gdh^~re_sk
+      pmgdh = me_pk^~re_sk
+      enc_id = senc(~id, kmid)
+  in
+  [ Server_Fetched_Messages(~sess, $Server)
+  , !Stored_Ciphertext($Server, <c, me_pk, m_gdh>)
+  , Fr(~re_sk)
+  , Fr(~id) ]
+  --[ DHElement_Check(kmid)
+    , DHElement_Check(me_pk)
+    , DHElement_Check(pmgdh)
+    , Challenge_OUT(~id) ]->
+  [ Stored_Ciphertext_Challenge($Server, ~sess, ~id, <c, me_pk>)
+  , Server_Out(~sess, $Server, <'challenge', <enc_id, pmgdh>>) ]
+
+rule Server_Challenge_Response:
+  [ Stored_Ciphertext_Challenge($Server, ~sess, ~id, <c, me_pk>)
+  , Server_In(~sess, $Server, <'solution', ~id>) ]
+  --[ Solution_IN(~id) ]->
+  [ Server_Out(~sess, $Server, <'ciphertext', <c, me_pk>>)]
+
+// Key Registration
+
+rule Register_Newsroom_Key [color=#FF7F50]:
+  let public_key = pk(~ltk) in
+  [ Fr(~ltk) ]
+  --[ OnlyOnce($A)
+    , OnlyOnce($Server) ]->
+  [ !Ltk_Newsroom($A, ~ltk)
+  , !Pk_Newsroom($A, public_key)
+  , !Newsroom_Server($A, $Server)
+  , !Message_Server($Server)
+  , Out(public_key) ]
+
+rule Reveal_Newsroom_Key [color=#FF6961]:
+  [ !Ltk_Newsroom(A, ~ltk) ]
+  --[ Reveal_Newsroom_Key(A)
+    , SomeCompromise() ]->
+  [ Out(~ltk) ]
+
+rule Register_Source_Keys [color=#FDFD96]:
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_fetch_sk = kdf(<'Fetch', ~passphrase>)
+      s_dh_pk = 'g'^s_dh_sk
+      s_fetch_pk = 'g'^s_fetch_sk
+  in
+  [ Fr(~passphrase) ]
+  --[ Register_Source(s_dh_pk)
+    , Register_Source_Fetch(s_fetch_pk)
+    , OnlyOnce($A) ]->
+  [ !Ltk_Source_Passphrase($A, ~passphrase)
+  , Ltk_Source_DH_Key_Reveal($A, s_dh_sk)
+  , Ltk_Source_Fetch_Key_Reveal($A, s_fetch_sk)
+  , Out(<s_dh_pk, s_fetch_pk>) ]
+
+rule Reveal_Source_DH_Key [color=#FF6961]:
+  let s_dh_pk = 'g'^s_dh_sk
+  in
+  [ Ltk_Source_DH_Key_Reveal($A, s_dh_sk) ]
+  --[ Reveal_Source_DH_Key($A)
+    , Reveal_Source_DH_Key(s_dh_pk)
+    , SomeCompromise() ]->
+  [ Out(s_dh_sk) ]
+
+  rule Reveal_Source_Fetch_Key [color=#FF6961]:
+  let s_fetch_pk = 'g'^s_fetch_sk
+  in
+  [ Ltk_Source_Fetch_Key_Reveal($A, s_fetch_sk) ]
+  --[ Reveal_Source_Fetch_Key($A)
+    , Reveal_Source_Fetch_Key(s_fetch_pk)
+    , SomeCompromise() ]->
+  [ Out(s_fetch_sk) ]
+
+// Journalist Enrollment
+
+rule Journalist_Enrollment [color=#FF7F50]:
+  let j_sig_pk = pk(~j_sig_sk)
+      j_fetch_pk = 'g'^~j_fetch_sk
+      sig_j_pk = sign(<'signature', j_sig_pk, j_fetch_pk>, ~nr_sk)
+  in
+  [ !Ltk_Newsroom($NR, ~nr_sk)
+  , Fr(~j_sig_sk)
+  , Fr(~j_fetch_sk) ]
+  --[ Journalist_Verified($NR, $J)
+    , OnlyOnce($J) ]->
+  [ Out(<<j_sig_pk, j_fetch_pk>, sig_j_pk>)
+  , !Journalist_Enrolled($NR, $J)
+  , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !Ltk_Journalist_Fetch_Key($J, ~j_fetch_sk) ]
+
+rule Reveal_Journalist_SIG_Key [color=#FF6961]:
+  let j_sig_pk = pk(~j_sig_sk)
+  in
+  [ !Ltk_Journalist_SIG_Key($A, ~j_sig_sk) ]
+  --[ Reveal_Journalist_SIG_Key($A)
+    , Reveal_Journalist_SIG_Key(j_sig_pk)
+    , SomeCompromise() ]->
+  [ Out(~j_sig_sk) ]
+
+rule Reveal_Journalist_Fetch_Key [color=#FF6961]:
+  let j_fetch_pk = 'g'^~j_fetch_sk
+  in
+  [ !Ltk_Journalist_Fetch_Key($A, ~j_fetch_sk) ]
+  --[ Reveal_Journalist_Fetch_Key($A)
+    , Reveal_Journalist_Fetch_Key(j_fetch_pk)
+    , SomeCompromise() ]->
+  [ Out(~j_fetch_sk) ]
+
+rule Journalist_Register_EDH_Key [color=#FF7F50]:
+  let je_dh_pk = 'g'^~je_dh_sk
+      sig_je_pk = sign(<'ephemeral', je_dh_pk>, ~j_sig_sk)
+  in
+  [ !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
+  , Fr(~je_dh_sk) ]
+  -->
+  [ Out(<je_dh_pk, sig_je_pk>)
+  , Journalist_Ephemeral_Key($J, ~je_dh_sk)
+  , Journalist_EDH_Key_Reveal($J, ~je_dh_sk) ]
+
+rule Reveal_Journalist_EDH_Key [color=#FF6961]:
+  let je_dh_pk = 'g'^~je_dh_sk
+  in
+  [ Journalist_EDH_Key_Reveal($A, ~je_dh_sk) ]
+  --[ Reveal_Journalist_EDH_Key($A)
+    , Reveal_Journalist_EDH_Key(je_dh_pk)
+    , SomeCompromise() ]->
+  [ Out(~je_dh_sk) ]
+
+// Messaging and Fetching Protocol
+
+rule Source_Send [color=#6495ED]:
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_fetch_sk = kdf(<'Fetch', ~passphrase>)
+      s_dh_pk = 'g'^s_dh_sk
+      s_fetch_pk = 'g'^s_fetch_sk
+      me_pk = 'g'^~me_sk
+      k = je_dh_pk^~me_sk
+      m =  <'msg_s2j', ~msg, s_dh_pk, s_fetch_pk>
+      c = senc(m, k)
+      m_gdh = j_fetch_pk^~me_sk
+  in
+  [ !Ltk_Source_Passphrase($S, ~passphrase)
+  , !Pk_Newsroom($NR, nr_pk)
+  , !Newsroom_Server($NR, $Server)
+  , In(<<j_sig_pk, j_fetch_pk>, sig_j_pk, je_dh_pk, sig_je_pk>)
+  , Fr(~me_sk)
+  , Fr(~msg)
+  , Fr(~sess) ]
+  --[ // check signatures of journalist's longterm signature and ephemeral encryption keys
+      Eq(verify(sig_j_pk, <'signature', j_sig_pk, j_fetch_pk>, nr_pk), true)
+    , Eq(verify(sig_je_pk, <'ephemeral', je_dh_pk>, j_sig_pk), true)
+      // Actions for Lemmas
+    , Source_OUT(j_fetch_pk, $NR, c)
+    , Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, $NR, m)
+    , Ciphertext_OUT($Server, <'ciphertext', <c, me_pk, m_gdh>>)
+    ]->
+  [ Client_Out(~sess, $Server, <'ciphertext', <c, me_pk, m_gdh>>) ]
+
+rule Journalist_Fetch_Messages [color=#B4D9EF]:
+  [ Fr(~sess)
+  , !Journalist_Enrolled($NR, $J)
+  , !Newsroom_Server($NR, $Server) ]
+  --[ Journalist_Fetched($J, ~sess) ]->
+  [ Client_Out(~sess, $Server, 'fetch_messages')
+  , !Journalist_Fetched_Messages($J, $NR, $Server, ~sess) ]
+
+rule Journalist_Solve_Fetch_Challenge [derivchecks, color=#B4D9EF]:
+  let pmgdh = ('g'^~me_sk)^~re_sk
+      kmid = pmgdh^~j_fetch_sk
+  in
+  [ !Journalist_Fetched_Messages($J, $NR, $Server, ~sess)
+  , !Ltk_Journalist_Fetch_Key($J, ~j_fetch_sk)
+  , Client_In(~sess, $Server, <'challenge', <senc(~id, kmid), pmgdh>>) ]
+  --[ Symmetric_Encryption_IN(~id, kmid)
+    , DHElement_Check(kmid)
+    , DHElement_Check(pmgdh) ]->
+  [ Client_Out(~sess, $Server, <'solution', ~id>) ]
+
+rule Journalist_Recv [derivchecks, color=#6495ED]:
+  let me_pk = 'g'^~me_sk
+      k = me_pk^~je_dh_sk
+      m =  <'msg_s2j', msg, s_dh_pk, s_fetch_pk>
+      j_sig_pk = pk(~j_sig_sk)
+      j_fetch_pk = 'g'^~j_fetch_sk
+      je_dh_pk = 'g'^~je_dh_sk
+  in
+  [ Client_In(~sess, $Server, <'ciphertext', <senc(m, k), me_pk>>)
+  , !Journalist_Fetched_Messages($J, $NR, $Server, ~sess)
+  , Journalist_Ephemeral_Key($J, ~je_dh_sk)
+  , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !Ltk_Journalist_Fetch_Key($J, ~j_fetch_sk) ]
+  --[ // Actions for Lemmas
+      DHElement_Check(k)
+    , DHElement_Check(me_pk)
+    , Journalist_Received(j_sig_pk, j_fetch_pk, je_dh_pk, $NR, s_dh_pk, m)
+    ]->
+  [ Journalist_Recv($J, $NR, s_dh_pk, s_fetch_pk, m) ]
+
+rule Journalist_Send [color=#6495ED]:
+  let me_pk = 'g'^~me_sk
+      k = me_pk^~je_dh_sk
+      j_sig_pk = pk(~j_sig_sk)
+      m = <'msg_s2j', ~msg>
+      c = senc(m, k)
+      m_gdh = s_fetch_pk^~me_sk
+  in
+  [ Journalist_Recv($J, $NR, s_dh_pk, s_fetch_pk, msg_old)
+  , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !Newsroom_Server($NR, $Server)
+  , Fr(~me_sk)
+  , Fr(~msg)
+  , Fr(~sess) ]
+  --[ // Actions for Lemmas
+      Journalist_OUT(s_fetch_pk, c)
+    , Journalist_Sent(j_sig_pk, s_dh_pk, s_fetch_pk, m)
+    , Ciphertext_OUT($Server, c)
+    ]->
+  [ Client_Out(~sess, $Server, <'ciphertext', <c, me_pk, m_gdh>>) ]
+
+rule Source_Fetch_Messages [color=#B4D9EF]:
+  [ Fr(~sess)
+  , !Newsroom_Server($NR, $Server) ]
+  -->
+  [ Client_Out(~sess, $Server, 'fetch_messages')
+  , !Source_Fetched_Messages($S, $Server, ~sess) ]
+
+rule Source_Solve_Fetch_Challenge [derivchecks, color=#B4D9EF]:
+  let s_fetch_sk = kdf(<'Fetch', ~passphrase>)
+      pmgdh = ('g'^~me_sk)^~re_sk
+      kmid = pmgdh^s_fetch_sk
+  in
+  [ !Source_Fetched_Messages($S, $Server, ~sess)
+  , !Ltk_Source_Passphrase($S, ~passphrase)
+  , Client_In(~sess, $Server, <'challenge', <senc(~id, kmid), pmgdh>>) ]
+  --[ Symmetric_Encryption_IN(~id, kmid)
+    , DHElement_Check(kmid)
+    , DHElement_Check(pmgdh) ]->
+  [ Client_Out(~sess, $Server, <'solution', ~id>) ]
+
+rule Source_Recv [color=#6495ED]:
+  let s_dh_sk = kdf(<'DH', ~passphrase>)
+      s_dh_pk = 'g'^s_dh_sk
+      me_pk = 'g'^~me_sk
+      k = me_pk^s_dh_sk
+      m = <'msg_j2s', msg>
+  in
+  [ !Source_Fetched_Messages($S, $Server, ~sess)
+  , Client_In(~sess, $Server, <'ciphertext', <senc(m, k), me_pk>>)
+  , !Ltk_Source_Passphrase($S, ~passphrase) ]
+  --[ // Actions for Lemmas
+      Source_Received(s_dh_pk, m)
+    ]->
+  []
+
+restriction Eq:
+  "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
+
+restriction DHElement_Check:
+  "All x #t. DHElement_Check(x) @ #t ==> not(x = 'g' | x = DH_neutral)"
+
+restriction OnlyOnce:
+  "All x #i #j. OnlyOnce(x)@#i & OnlyOnce(x)@#j ==> #i = #j"
+
+lemma Auto_Sources [sources]:
+"All server c #t.
+        Ciphertext_IN(server, c) @ #t
+  ==>   (Ex #x. Ciphertext_OUT(server, c) @ #x & #x < #t)
+      | (Ex #x. KU(c) @ #x & #x < #t)"
+
+lemma Auto_Source_Ciphertext_Secrecy [reuse]:
+"All #t j_fetch_pk nr c.
+        Source_OUT(j_fetch_pk, nr, c) @ #t
+  ==>   (not Ex #x. K(c) @ #x)
+      | (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
+
+lemma Auto_Executability_Submission:
+exists-trace
+"Ex #t1 #t2 s_dh_pk j_sig_pk j_fetch_pk je_dh_pk nr m.
+        Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #t1
+      & Journalist_Received(j_sig_pk, j_fetch_pk, je_dh_pk, nr, s_dh_pk, m) @ #t2
+      & (not Ex #x. SomeCompromise() @ #x)"
+
+// nicht automatisch verifizierbar
+lemma Secrecy_Source_Message:
+"All #t s_dh_pk j_sig_pk j_fetch_pk je_dh_pk nr m. 
+        Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #t
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
+      | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x & #x < #t)"
+
+lemma Auto_Injective_Agreement_Source_Message [reuse]:
+"All j_sig_pk j_fetch_pk je_dh_pk nr s_dh_pk m.
+        Journalist_Received(j_sig_pk, j_fetch_pk, je_dh_pk, nr, s_dh_pk, m) @ #t1
+      & Register_Source(s_dh_pk) @ #t2
+  ==> (Ex #x1. Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #x1 
+              & #x1 < #t1
+              & not (Ex j_sig_pk_2 j_fetch_pk_2 je_dh_pk_2 nr_2 s_dh_pk_2 #x2. Journalist_Received(j_sig_pk_2, j_fetch_pk_2, je_dh_pk_2, nr_2, s_dh_pk_2, m) @ #x2 & not (#x2 = #t1)))
+      | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)
+      | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x)
+      | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)"
+
+
+lemma Auto_Executability_Journalist_Response:
+exists-trace
+"Ex #t1 #t2 s_pk j_pk m.
+        Journalist_Sent(j_pk, s_pk, m) @ #t1
+      & Source_Received(s_pk, j_pk, m) @ #t2
+      & (not Ex #x. SomeCompromise() @ #x)"
+
+// lemma Auto_Secrecy_Journalist_Message:
+// "All #t1 #t2 j_pk s_pk m. 
+//         Journalist_Sent(j_pk, s_pk, m) @ #t1
+//       & Register_Source(s_pk) @ #t2
+//   ==>   (not Ex #x. K(m) @ #x)
+//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
+
+// lemma Auto_PFS_Journalist_Message:
+// "All #t1 #t2 j_pk s_pk m. 
+//         Journalist_Sent(j_pk, s_pk, m) @ #t1
+//       & Register_Source(s_pk) @ #t2
+//   ==>   (not Ex #x. K(m) @ #x)
+//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x & #x < #t1)"
+
+// lemma Auto_Non_Injective_Agreement_Journalist_Message:
+// "All #t1 j_pk s_pk m. 
+//         Source_Received(s_pk, j_pk, m) @ #t1
+//   ==>   (Ex #x. Journalist_Sent(j_pk, s_pk, m) @ #x & #x < #t1) 
+//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
+//       | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
+  
+// lemma Auto_Injective_Agreement_Journalist_Message:
+// "All #t1 j_pk s_pk m. 
+//         Source_Received(s_pk, j_pk, m) @ #t1
+//   ==>   (Ex #x1. Journalist_Sent(j_pk, s_pk, m) @ #x1 
+//               & #x1 < #t1
+//               & not (Ex j_pk_2 s_pk_2 #x2. Source_Received(s_pk_2, j_pk_2, m) @ #x2 & not (#x2 = #t1)))
+//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)
+//       | (Ex #x. Reveal_Journalist_Signing_Key(j_pk) @ #x)"
+
+end

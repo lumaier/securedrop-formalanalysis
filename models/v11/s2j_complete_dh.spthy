@@ -57,7 +57,7 @@ rule Reveal_Source_Encryption_Key [color=#FF6961]:
 // Journalist Enrollment
 
 rule Journalist_Enrollment [color=#FF7F50]:
-  let j_pk = 'g'^~j_sk
+  let j_pk = pk(~j_sk)
       sig_j_pk = sign(<'signature', j_pk>, nr_sk)
   in
   [ !Ltk_Newsroom($NR, nr_sk)
@@ -67,6 +67,7 @@ rule Journalist_Enrollment [color=#FF7F50]:
   [ Out(<j_pk, sig_j_pk>)
   , !Journalist_Enrolled($NR, $J)
   , !Ltk_Journalist_Signing($J, ~j_sk)
+  , !Pk_Journalist_Signing_DH($J, 'g'^~j_sk)
   , !Pk_Journalist_Signing($J, j_pk) ]
 
 rule Reveal_Journalist_Signing_Key [color=#FF6961]:
@@ -97,12 +98,6 @@ rule Reveal_Journalist_Ephemeral_Key [color=#FF6961]:
 
 // Messaging and Fetching Protocol
 
-// rule Source_Submission [color=#6495ED]:
-//   [ In(je_pk)
-//   , Fr(~msg) ]
-//   -->
-//   [ Source_Recv($S, ~msg, $J, je_pk) ]
-
 rule Source_Send [color=#6495ED]:
   let s_pk = 'g'^s_sk
       k = (je_pk^~me_sk)^s_sk
@@ -113,9 +108,7 @@ rule Source_Send [color=#6495ED]:
       me_pk = ('g'^~me_sk)^s_sk
       // me_pk = ('g'^~me_sk)
   in
-  [ 
-    // Source_Recv($S, ~msg, $J, je_pk)
-    !Ltk_Source_Encryption($S, s_sk)
+  [ !Ltk_Source_Encryption($S, s_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , !Pk_Journalist_Signing($J, j_pk)
   , In(<j_pk, sig_j_pk, je_pk, sig_je_pk>)
@@ -135,8 +128,9 @@ rule Source_Send [color=#6495ED]:
     ]->
   [ Out(<c, me_pk>) ]
 
-rule Journalist_Recv [color=#6495ED]:
-  let k = me_pk^je_sk
+rule Journalist_Recv [derivchecks,color=#6495ED]:
+  let s_pk = 'g'^s_sk
+      k = me_pk^je_sk
       m = <'msg_s2j', msg, me_sk, s_pk, $J, $NR>
       // m = <'msg_s2j', msg, s_pk>
       je_pk = 'g'^je_sk
@@ -144,8 +138,7 @@ rule Journalist_Recv [color=#6495ED]:
   [ In(<senc(m, k), me_pk>)
   , !Journalist_Ephemeral_Key($J, je_sk)
   , !Journalist_Enrolled($NR, $J)]
-  --[ 
-      Eq(me_pk, s_pk^me_sk) // check that public key is the one used for encryption
+  --[ Eq(me_pk, s_pk^me_sk) // check that public key is the one used for encryption
     , DHElement_Check(me_pk)
     , DHElement_Check(s_pk)
     , DHElement_Check(k)
@@ -173,14 +166,15 @@ rule Journalist_Send [color=#6495ED]:
     ]->
   [ Out(<c, me_pk>) ]
 
-rule Source_Recv [color=#6495ED]:
-  let k = me_pk^s_sk
+rule Source_Recv [derivchecks,color=#6495ED]:
+  let j_pk = 'g'^j_sk
+      k = me_pk^s_sk
       s_pk = 'g'^s_sk
       m = <'msg_j2s', msg, me_sk, j_pk, $J, s_pk>
   in
   [ In(<senc(m, k), me_pk>)
   , !Ltk_Source_Encryption($S, s_sk)
-  , !Pk_Journalist_Signing($J, j_pk) ]
+  , !Pk_Journalist_Signing_DH($J, j_pk) ]
   --[ Eq(me_pk, j_pk^me_sk) // check that public key is the one used for encryption
     , DHElement_Check(me_pk)
     , DHElement_Check(j_pk)
@@ -191,8 +185,8 @@ rule Source_Recv [color=#6495ED]:
     ]->
   [ Source_Recv($S, msg, $J) ]
 
-// restriction Eq:
-//   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
+restriction Eq:
+  "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"
 
 restriction DHElement_Check:
   "All x #t. DHElement_Check(x) @ #t ==> not(x = 'g' | x = DH_neutral)"
@@ -223,17 +217,6 @@ exists-trace
 "Ex #t1 #t2 s_pk j m.
         Journalist_Sent(j, s_pk, m) @ #t1
       & Source_Received(s_pk, j, m) @ #t2
-      & (not Ex #x. SomeCompromise() @ #x)"
-
-lemma Executability_Source_Response:
-exists-trace
-"Ex #t1 #t2 #t3 #t4 #t5 #t6 s j nr m_old m m_new.
-        Source_Submission(s, j, nr, m_old) @ #t1
-      & Journalist_Read(j, m_old) @ #t2
-      & Journalist_Response(j, m_old, m) @ #t3
-      & Source_Read(s, m) @ #t4
-      & Source_Response(s, j, nr, m, m_new) @ #t5
-      & Journalist_Read(j, m_new) @ #t6
       & (not Ex #x. SomeCompromise() @ #x)"
 
 lemma Auto_Secrecy_Source_Message:

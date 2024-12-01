@@ -88,6 +88,23 @@ rule Journalist_Enrollment [color=#FF7F50]:
 
 // Messaging and Fetching Protocol
 
+rule Create_Submission [color=#6495ED]:
+  [ Fr(~msg) ]
+  -->
+  [ !Submission($A, ~msg) ]
+
+rule Journalist_Create_Response [color=#6495ED]:
+  [ Journalist_Received_Message($A, <msg_old, key>)
+  , Fr(~msg) ]
+  -->
+  [ !Journalist_Create_Response($A, <msg_old, key>, ~msg) ]
+
+rule Source_Create_Response [color=#6495ED]:
+  [ Source_Received_Message($A, msg_old)
+  , Fr(~msg) ]
+  -->
+  [ !Source_Create_Response($A, msg_old, ~msg) ]
+
 rule Source_Submit [derivchecks, color=#6495ED]:
   let s_pk = pk(s_sk)
       k = hkdf(~ss)
@@ -96,11 +113,11 @@ rule Source_Submit [derivchecks, color=#6495ED]:
       ss_encap = encap(~ss, je_pk)
       me_pk = 'g'^~me_sk
   in
-  [ !Ltk_Source_Encryption($S, s_sk)
+  [ !Submission($S, ~msg)
+  , !Ltk_Source_Encryption($S, s_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , !Pk_Journalist_Signing($J, j_pk)
   , In(<j_pk, sig_j_pk, je_pk, sig_je_pk>)
-  , Fr(~msg)
   , Fr(~ss)
   , Fr(~me_sk) ]
   --[ Eq(verify(sig_j_pk, j_pk, nr_pk), true)
@@ -124,19 +141,18 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
     , Received($J, $S, m)
     , Eq(flag, 'msg')
     , Eq(verify(sig_J, <'journalist', msg, $J>, s_pk), true)]->
-  [ Journalist_Recv($J, msg, s_pk) ]
+  [ Journalist_Received_Message($J, <msg, s_pk>) ]
 
-rule Journalist_Reply [color=#6495ED]:
+rule Journalist_Reply_To_Source [color=#6495ED]:
   let k = hkdf(~ss)
       m = <'msg', ~msg, $J>
       c = senc(m, k)
       ss_encap = encap(~ss, s_pk)
       me_pk = 'g'^~me_sk
   in
-  [ Journalist_Recv($J, msg_old, s_pk)
+  [ !Journalist_Create_Response($J, <msg_old, s_pk>, ~msg)
   , !Ltk_Journalist_Signing($J, j_sk)
   , !Pk_Source_Encryption($S, s_pk)
-  , Fr(~msg)
   , Fr(~me_sk)
   , Fr(~je_sk)
   , Fr(~ss) ]
@@ -157,7 +173,7 @@ rule Source_Recv [color=#6495ED]:
     , Symmetric_Encryption_IN(m, k)
     , Eq(flag, 'msg')
     , Received_TEMP($S, $J, m) ]->
-  [ Source_Recv($S, msg, $J) ]
+  [ Source_Received_Message($S, msg) ]
 
 rule Source_Reply [derivchecks, color=#6495ED]:
   let s_pk = pk(s_sk)
@@ -167,12 +183,11 @@ rule Source_Reply [derivchecks, color=#6495ED]:
       ss_encap = encap(~ss, je_pk)
       me_pk = 'g'^~me_sk
   in
-  [ Source_Recv($S, msg_old, $J)
+  [ !Source_Create_Response($S, msg_old, ~msg)
   , !Ltk_Source_Encryption($S, s_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , !Pk_Journalist_Signing($J, j_pk)
   , In(<j_pk, sig_j_pk, je_pk, sig_je_pk>)
-  , Fr(~msg)
   , Fr(~ss)
   , Fr(~me_sk) ]
   --[ Eq(verify(sig_j_pk, j_pk, nr_pk), true)

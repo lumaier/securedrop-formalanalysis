@@ -62,8 +62,9 @@ rule Server_Receive_Fetch_Request:
   -->
   [ !Server_Fetched_Messages(~sess, $Server) ]
 
-rule Server_Create_Challenge:
-  let kmid = m_gdh^~re_sk
+rule Server_Create_Challenge [derivchecks]:
+  let me_pk = 'g'^me_sk
+      kmid = m_gdh^~re_sk
       pmgdh = me_pk^~re_sk
       enc_id = senc(~id, kmid)
   in
@@ -71,8 +72,7 @@ rule Server_Create_Challenge:
   , !Stored_Ciphertext($Server, <c, me_pk, m_gdh>)
   , Fr(~re_sk)
   , Fr(~id) ]
-  --[ RaiseBy(~re_sk)
-    , DHElement_Check(kmid)
+  --[ DHElement_Check(kmid)
     , DHElement_Check(me_pk)
     , DHElement_Check(pmgdh) ]->
   [ !Server_Fetched_Messages(~sess, $Server)
@@ -312,8 +312,7 @@ lemma Auto_Sources [sources]:
 "(All server c #t.
         Ciphertext_IN(server, c) @ #t
   ==>   (Ex #x. Ciphertext_OUT(server, c) @ #x & #x < #t)
-      | (Ex #x. KU(c) @ #x & #x < #t)
-      | (Ex sk #x #y. RaiseBy(sk) @ #x & KU(sk) @ #y & #y < #t))"
+      | (Ex #x. KU(c) @ #x & #x < #t))"
 
 lemma Auto_Executability_Submission:
 exists-trace
