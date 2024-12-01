@@ -52,3 +52,10 @@ This model extends `v3/source_journalist_fetching.spthy` by encrypting the messa
 ### `source_journalist_kem_clean.spthy`
 
 Up to v8, this is the most up-to-date version. This includes dedicated key registration and reveal rules for all the keys (and usage in the security properties).
+
+
+| Model | Trusted Server | Message Fetching 
+| :---------------- | :------: | :------: |
+| `v11/s2j_complete_dh_vanilla` |  |  | 
+| `v12/s2j_server_dh_vanilla` | &#x2705; | &#x2705; | 
+| `v12/s2j_complete_dh_kenny` | | |
