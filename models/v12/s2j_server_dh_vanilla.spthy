@@ -356,18 +356,10 @@ lemma Secrecy_Source_Message:
 "All #t s_dh_pk j_sig_pk j_fetch_pk je_dh_pk nr m. 
         Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #t
   ==>   (not Ex #x. K(m) @ #x)
-      | (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x)
-      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
-      | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x & #x < #t)"
-
-// nicht automatisch verifizierbar
-// TODO: check whether SIG key of journalist needs to be compromised
-lemma Secrecy_Source_Message_2:
-"All #t s_dh_pk j_sig_pk j_fetch_pk je_dh_pk nr m. 
-        Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #t
-  ==>   (not Ex #x. K(m) @ #x)
-      | (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x) // TODO probably more needs to be leaked (to decrypt)
-      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
+      | (  (  (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x)
+            | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t))
+         & (  (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x & #x < #t)
+            | (Ex #x. Reveal_Journalist_EDH_Key(je_dh_pk) @ #x)))"
 
 lemma Auto_Injective_Agreement_Source_Message [reuse]:
 "All j_sig_pk j_fetch_pk je_dh_pk nr s_dh_pk m #t1 #t2.
@@ -393,7 +385,7 @@ lemma Auto_Secrecy_Journalist_Message:
         Journalist_Sent(j_sig_pk, s_dh_pk, m) @ #t1
       & Register_Source(s_dh_pk) @ #t2
   ==>   (not Ex #x. K(m) @ #x)
-      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
+      | (Ex #x. Reveal_Source_DH_Key(s_dh_pk) @ #x)"
 
 // lemma Auto_PFS_Journalist_Message:
 // "All #t1 #t2 j_pk s_pk m. 

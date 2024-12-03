@@ -1,4 +1,4 @@
-TAMARIN_RELEASE=tamarin-prover-release-1.10.0
+TAMARIN_RELEASE=tamarin-prover
 N_THREADS=10
 PORT=1611 # used port for port-forwarding the GUI
 DIR="v1/"
