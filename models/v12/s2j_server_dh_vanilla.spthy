@@ -252,8 +252,9 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
       j_sig_pk = pk(~j_sig_sk)
       j_fetch_pk = 'g'^~j_fetch_sk
       je_dh_pk = 'g'^~je_dh_sk
+      c = senc(m, k)
   in
-  [ Client_In(~sess, $Server, <'ciphertext', <senc(m, k), me_pk>>)
+  [ Client_In(~sess, $Server, <'ciphertext', <c, me_pk>>)
   , !Journalist_Fetched_Messages($J, $NR, $Server, ~sess)
   , Journalist_Ephemeral_Key($J, ~je_dh_sk)
   , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
@@ -267,9 +268,9 @@ rule Journalist_Recv [derivchecks, color=#6495ED]:
 
 rule Journalist_Send [color=#6495ED]:
   let me_pk = 'g'^~me_sk
-      k = me_pk^~je_dh_sk
+      k = s_dh_pk^~me_sk
       j_sig_pk = pk(~j_sig_sk)
-      m = <'msg_s2j', ~msg>
+      m = <'msg_s2j', ~msg, j_sig_pk>
       c = senc(m, k)
       m_gdh = s_fetch_pk^~me_sk
   in
@@ -281,7 +282,7 @@ rule Journalist_Send [color=#6495ED]:
   , Fr(~sess) ]
   --[ // Actions for Lemmas
       Journalist_OUT(s_fetch_pk, c)
-    , Journalist_Sent(j_sig_pk, s_dh_pk, s_fetch_pk, m)
+    , Journalist_Sent(j_sig_pk, s_dh_pk, m)
     , Ciphertext_OUT($Server, c)
     ]->
   [ Client_Out(~sess, $Server, <'ciphertext', <c, me_pk, m_gdh>>) ]
@@ -306,18 +307,18 @@ rule Source_Solve_Fetch_Challenge [derivchecks, color=#B4D9EF]:
     , DHElement_Check(pmgdh) ]->
   [ Client_Out(~sess, $Server, <'solution', ~id>) ]
 
-rule Source_Recv [color=#6495ED]:
+rule Source_Recv [color=#6495ED, derivchecks]:
   let s_dh_sk = kdf(<'DH', ~passphrase>)
       s_dh_pk = 'g'^s_dh_sk
       me_pk = 'g'^~me_sk
       k = me_pk^s_dh_sk
-      m = <'msg_j2s', msg>
+      m = <'msg_s2j', msg, j_sig_pk>
   in
   [ !Source_Fetched_Messages($S, $Server, ~sess)
   , Client_In(~sess, $Server, <'ciphertext', <senc(m, k), me_pk>>)
   , !Ltk_Source_Passphrase($S, ~passphrase) ]
   --[ // Actions for Lemmas
-      Source_Received(s_dh_pk, m)
+      Source_Received(s_dh_pk, j_sig_pk, m)
     ]->
   []
 
@@ -359,8 +360,17 @@ lemma Secrecy_Source_Message:
       | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
       | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x & #x < #t)"
 
+// nicht automatisch verifizierbar
+// TODO: check whether SIG key of journalist needs to be compromised
+lemma Secrecy_Source_Message_2:
+"All #t s_dh_pk j_sig_pk j_fetch_pk je_dh_pk nr m. 
+        Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #t
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Journalist_Fetch_Key(j_fetch_pk) @ #x) // TODO probably more needs to be leaked (to decrypt)
+      | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
+
 lemma Auto_Injective_Agreement_Source_Message [reuse]:
-"All j_sig_pk j_fetch_pk je_dh_pk nr s_dh_pk m.
+"All j_sig_pk j_fetch_pk je_dh_pk nr s_dh_pk m #t1 #t2.
         Journalist_Received(j_sig_pk, j_fetch_pk, je_dh_pk, nr, s_dh_pk, m) @ #t1
       & Register_Source(s_dh_pk) @ #t2
   ==> (Ex #x1. Source_Sent(s_dh_pk, j_sig_pk, j_fetch_pk, je_dh_pk, nr, m) @ #x1 
@@ -373,17 +383,17 @@ lemma Auto_Injective_Agreement_Source_Message [reuse]:
 
 lemma Auto_Executability_Journalist_Response:
 exists-trace
-"Ex #t1 #t2 s_pk j_pk m.
-        Journalist_Sent(j_pk, s_pk, m) @ #t1
-      & Source_Received(s_pk, j_pk, m) @ #t2
+"Ex #t1 #t2 s_dh_pk j_sig_pk m.
+        Journalist_Sent(j_sig_pk, s_dh_pk, m) @ #t1
+      & Source_Received(s_dh_pk, j_sig_pk, m) @ #t2
       & (not Ex #x. SomeCompromise() @ #x)"
 
-// lemma Auto_Secrecy_Journalist_Message:
-// "All #t1 #t2 j_pk s_pk m. 
-//         Journalist_Sent(j_pk, s_pk, m) @ #t1
-//       & Register_Source(s_pk) @ #t2
-//   ==>   (not Ex #x. K(m) @ #x)
-//       | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
+lemma Auto_Secrecy_Journalist_Message:
+"All #t1 #t2 j_sig_pk s_dh_pk m. 
+        Journalist_Sent(j_sig_pk, s_dh_pk, m) @ #t1
+      & Register_Source(s_dh_pk) @ #t2
+  ==>   (not Ex #x. K(m) @ #x)
+      | (Ex #x. Reveal_Source_Encryption_Key(s_pk) @ #x)"
 
 // lemma Auto_PFS_Journalist_Message:
 // "All #t1 #t2 j_pk s_pk m. 
