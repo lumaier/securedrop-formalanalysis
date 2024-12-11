@@ -14,32 +14,20 @@ Color semantics:
 
 - Yellow (#FDFD96)      Key setup/distribution
 - Red (#FF6961)         Adversary activity
-- Light blue (#B4D9EF)  Message Fetching
 - Dark blue (#6495ED)   Messaging
 - Orange (#FF7F50)      Registration/Enrollment
 
 */
-
-// PQ Attacker
-// rule PQAttackerStart[color=#FF6961]:
-//   [] --[ PQAttack(), SomeCompromise() ]-> [ !PQAttacker() ]
-
-// rule PQAttacker[color=#FF6961]:
-//   [ !PQAttacker(), !NonPQSecKey(k) ] --> [ Out(k) ]
-
-// restriction PQAttacker:
-//   "All #compr #t. PQAttack() @ #compr & PrePQAttack() @ #t ==> #t < #compr"
 
 // Key Registration
 
 rule Register_Newsroom_Key [color=#FF7F50]:
   let public_key = pk(~ltk) in
   [ Fr(~ltk) ]
-  --[ PrePQAttack() ]->
+  -->
   [ !Ltk_Newsroom($A, ~ltk)
   , !Pk_Newsroom($A, public_key)
-  , Out(public_key)
-  , !NonPQSecKey(~ltk) ]
+  , Out(public_key) ]
 
 rule Reveal_Newsroom_Key [color=#FF6961]:
   [ !Ltk_Newsroom(A, ~ltk) ]
@@ -54,16 +42,11 @@ rule Register_Source_Passphrase [color=#FF7F50]:
       s_pke_pk = pk(s_pke_sk)
   in
   [ Fr(~passphrase) ]
-  --[ Register_Source(s_dh_pk)
-    , PrePQAttack() ]->
+  --[ Register_Source(s_dh_pk) ]->
   [ !Ltk_Source_Passphrase($A, ~passphrase)
   , Ltk_Source_DH_Key_Reveal($A, s_dh_sk)
   , Ltk_Source_PKE_Key_Reveal($A, s_pke_sk)
-  , !NonPQSecKey(s_dh_sk)
-  , !NonPQSecKey(s_pke_sk)
   , Out(<s_dh_pk, s_pke_pk>) ]
-
-// TODO: reveal passphrase
 
 rule Reveal_Source_DH_Key [color=#FF6961]:
   let s_dh_pk = 'g'^s_dh_sk
@@ -73,7 +56,6 @@ rule Reveal_Source_DH_Key [color=#FF6961]:
     , Reveal_Source_DH_Key(s_dh_pk)
     , SomeCompromise() ]->
   [ Out(s_dh_sk) ]
-
 
 rule Reveal_Source_PKE_Key [color=#FF6961]:
   let s_pke_pk = pk(s_pke_sk)
@@ -95,15 +77,12 @@ rule Journalist_Enrollment [color=#FF7F50]:
   , Fr(~j_sig_sk)
   , Fr(~j_dh_sk) ]
   --[ Journalist_Verified($NR, $J)
-    , OnlyOnce($J)
-    , PrePQAttack() ]->
+    , OnlyOnce($J) ]->
   [ Out(<<j_sig_pk, j_dh_pk>, sig_j_pk>)
   , !Journalist_Enrolled($NR, $J)
   , !Journalist_Signature($NR, $J, <j_sig_pk, j_dh_pk>, sig_j_pk)
   , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
-  , !Ltk_Journalist_DH_Key($J, ~j_dh_sk)
-  , !NonPQSecKey(~j_sig_sk)
-  , !NonPQSecKey(~j_dh_sk) ]
+  , !Ltk_Journalist_DH_Key($J, ~j_dh_sk) ]
 
 rule Reveal_Journalist_SIG_Key [color=#FF6961]:
   let j_sig_pk = pk(~j_sig_sk)
@@ -131,13 +110,11 @@ rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   [ !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
   , Fr(~je_dh_sk)
   , Fr(~je_pke_sk) ]
-  --[ PrePQAttack() ]->
+  -->
   [ Out(<<je_dh_pk, je_pke_pk>,  sig_je_pk>)
   , Journalist_Ephemeral_Key($J, ~je_dh_sk, ~je_pke_sk)
   , Journalist_EDH_Key_Reveal($J, ~je_dh_sk)
-  , Journalist_EPKE_Key_Reveal($J, ~je_pke_sk)
-  , !NonPQSecKey(~je_dh_sk)
-  , !NonPQSecKey(~je_pke_sk) ]
+  , Journalist_EPKE_Key_Reveal($J, ~je_pke_sk) ]
 
 rule Reveal_Journalist_EDH_Key [color=#FF6961]:
   let je_dh_pk = 'g'^~je_dh_sk
@@ -179,13 +156,9 @@ rule Source_Send [color=#6495ED]:
       Eq(verify(sig_j_pk, <'signature', <j_sig_pk, j_dh_pk>>, nr_pk), true)
     , Eq(verify(sig_je_pk, <'ephemeral', <je_dh_pk, je_pke_pk>>, j_sig_pk), true)
       // Actions for Lemmas
-    , Symmetric_Encryption_OUT(m, k)
-    , Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, $NR, m)
-    , PrePQAttack()
-
+    , Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, $NR, m) 
     ]->
-  [ Out(<c, enc_gs, me_pk>)
-  , !NonPQSecKey(~me_sk) ]
+  [ Out(<c, enc_gs, me_pk>) ]
 
 rule Journalist_Recv [color=#6495ED,derivchecks]:
   let s_dh_pk = 'g'^s_dh_sk
@@ -204,9 +177,7 @@ rule Journalist_Recv [color=#6495ED,derivchecks]:
     , DHElement_Check(s_dh_pk)
     , DHElement_Check(me_pk)
       // Actions for Lemmas
-    , Symmetric_Encryption_IN(m, k)
     , Journalist_Received(j_sig_pk, je_dh_pk, $NR, s_dh_pk, m)
-    , PrePQAttack()
     ]->
   [ Journalist_Recv($J, $NR, s_dh_pk, s_pke_pk, m) ]
 
@@ -224,12 +195,9 @@ rule Journalist_Send [color=#6495ED]:
   , Fr(~msg)
   , Fr(~me_sk) ]
   --[ // Actions for Lemmas
-      Symmetric_Encryption_OUT(m, k)
-    , Journalist_Response(j_sig_pk, j_dh_pk, $NR, s_dh_pk, m_old, m)
-    , PrePQAttack()
+      Journalist_Response(j_sig_pk, j_dh_pk, $NR, s_dh_pk, m_old, m)
     ]->
-  [ Out(<c, enc_gj, me_pk>) 
-  , !NonPQSecKey(~me_sk) ]
+  [ Out(<c, enc_gj, me_pk>) ]
 
 rule Source_Recv [color=#6495ED,derivchecks]:
   let j_dh_pk = 'g'^~j_dh_sk
@@ -247,9 +215,7 @@ rule Source_Recv [color=#6495ED,derivchecks]:
     , DHElement_Check(k)
     , Eq(verify(sig_j_pk, <'signature', <j_sig_pk, j_dh_pk>>, nr_pk), true)
       // Actions for Lemmas
-    , Symmetric_Encryption_IN(m, k)
     , Source_Received(s_dh_pk, j_sig_pk, j_dh_pk, $NR, m)
-    , PrePQAttack()
     ]->
   []
 
@@ -262,17 +228,6 @@ restriction DHElement_Check:
 restriction OnlyOnce:
   "All x #i #j. OnlyOnce(x)@#i & OnlyOnce(x)@#j ==> #i = #j"
 
-/* Without this Source-Lemma, Tamarin thinks that the "Fetch" Rules act as decryption oracles.
-   This Source-Lemma ensures that if a party gets a ciphertext, either the adversary encrypted the message (i.e, it knew the message)
-   or the adversary got the ciphertext from an output in the protocol.
-*/
-lemma Auto_Symmetric_Encryption [sources]:
-"All m key #t.
-        Symmetric_Encryption_IN(m, key) @ #t
-  ==>   ( (Ex #x. KU(m) @ #x & #x < #t)
-        & (Ex #x. KU(key) @ #x & #x < #t))
-      | (Ex #x. Symmetric_Encryption_OUT(m, key) @ #x & #x < #t)"
-
 // not automatically verifiable
 lemma Executability_Submission:
 exists-trace
@@ -281,7 +236,7 @@ exists-trace
       & Journalist_Received(j_sig_pk, je_dh_pk, nr, s_dh_pk, m) @ #t2
       & (not Ex #x. SomeCompromise() @ #x)"
 
-// it implies PQ secrecy and PFS
+// implies PQ secrecy and PFS
 lemma Auto_Secrecy_Source_Message:
 "All #t s_dh_pk j_sig_pk je_dh_pk nr m. 
         Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, nr, m) @ #t
