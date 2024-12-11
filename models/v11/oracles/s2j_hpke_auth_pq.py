@@ -67,7 +67,7 @@ elif argv[1] in ['Auto_Injective_Agreement_Source_Message']:
     '!KU( \'g\'^x.1',
     '(#x2',
     '!KU( senc(<\'msg_s2j\', ~msg,',
-    '!KU( H(kdf(<\'g\'^(~je_dh_sk*kdf(<\'DH\', ~passphrase>)), z, z.1,             je_dh_pk, \'g\'^kdf(<\'DH\', ~passphrase>)>),       m_pk, z.2, c_pq)) @ #vk.8',
+    '!KU( H(kdf(<\'g\'^(~je_dh_sk*kdf(<\'DH\', ~passphrase>)), z, z.1,             je_dh_pk, \'g\'^kdf(<\'DH\', ~passphrase>)>),       m_pk,',
     '!KU( ~msg )',
     '!KU( kdf(<\'g\'^(~je_dh_sk*kdf(<\'DH\', ~passphrase>)),           \'g\'^(~je_dh_sk*~me_sk)>))',
     'splitEqs(3)'
