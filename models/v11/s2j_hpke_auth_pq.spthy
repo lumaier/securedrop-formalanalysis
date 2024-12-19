@@ -343,7 +343,7 @@ exists-trace
 lemma Auto_Secrecy_Journalist_Message:
 "All #t1 #t2 #t3 s_dh_pk s_kem_pk j_sig_pk je_dh_pk je_kem_pk j_dh_pk nr m_old m.
         Source_Sent(s_dh_pk, j_sig_pk, je_dh_pk, je_kem_pk, nr, m_old) @ #t1
-      & Journalist_Received(j_sig_pk, je_dh_pk, nr, s_dh_pk, m_old) @ #t2 & #t1 < #t2
+      & Journalist_Received(j_sig_pk, je_dh_pk, nr, s_dh_pk, m_old) @ #t2
       & Journalist_Response(j_sig_pk, j_dh_pk, nr, s_dh_pk, s_kem_pk, m_old, m) @ #t3
   ==>   (not Ex #x. K(m) @ #x)
       | (  (Ex #x. Reveal_Source_KEM_Key(s_kem_pk) @ #x)
