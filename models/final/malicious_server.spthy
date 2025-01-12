@@ -3,7 +3,7 @@ begin
 
 builtins: symmetric-encryption, asymmetric-encryption, diffie-hellman, signing
 
-heuristic: o "./oracles/s2j_hpke_auth_pq.py"
+heuristic: o "./oracles/malicious_server.py"
 
 // KDF
 functions: kdf/1
