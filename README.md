@@ -1,6 +1,6 @@
-# Formal Analysis of the SecureDrop Protocol
+# A Formal Analysis of the SecureDrop Protocol
 
-This repository contains the Tamarin models from Luca Maier's master's thesis "Formal Analysis of the SecureDrop protocol".
+This repository contains the Tamarin models from Luca Maier's master's thesis "A Formal Analysis of the SecureDrop protocol".
 
 There are two separate models in `./models/`: `malicious_user` and `malicious_server`.
 
