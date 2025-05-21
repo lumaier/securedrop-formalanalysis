@@ -1,0 +1,61 @@
+rule ClientOut[color=#FFFFFF]:
+  [ Client_Out(~sess, $Server, msg), !SecureDropInstance($Server) ]
+  -->
+  [ !Client(~sess, $Server, msg) ]
+
+rule ServerOut[color=#FFFFFF]:
+  [ Server_Out(~sess, $Server, msg), !SecureDropInstance($Server) ]
+  -->
+  [ !Server(~sess, $Server, msg) ]
+
+rule ClientToServer[color=#FFFFFF]:
+  [ !Client(~sess, $Server, msg) ]
+  -->
+  [ Server_In(~sess, $Server, msg) ]
+
+rule ServerToClient[color=#FFFFFF]:
+  [ !Server(~sess, $Server, msg) ]
+  -->
+  [ Client_In(~sess, $Server, msg) ]
+
+rule AdversaryClientOut[color=#FF6961]:
+  [ In(~sess), In(msg), !SecureDropInstance($Server) ]
+  -->
+  [ !Client(~sess, $Server, msg) ]
+
+rule ServerCompromise:
+  [ !SecureDropInstance($Server) ]
+  --[ AdversaryActivity() ]->
+  [ !ActiveCompromise($Server), !PassiveCompromise($Server) ]
+
+rule Snapshot:
+  [ !SecureDropInstance($Server) ]
+  --[ AdversaryActivity() ]->
+  [ !PassiveCompromise($Server) ]
+
+rule ServerToAdversaryClient[color=#FF6961]:
+  [ In(adversarySess), !Server(adversarySess, $Server, msg) ]
+  --[ AdversaryActivity()
+    , ServerSent(msg) ]->
+  [ Out(msg) ]
+
+rule ServerAdversaryFromClient[color=#FF6961]:
+  [ !Client(~sess, $Server, msg), !PassiveCompromise($Server) ]
+  --[ AdversaryActivity()
+    , ClientSent(msg) ]->
+  [ Out(msg) ]
+
+rule ServerAdversaryToClient[color=#FF6961]:
+  [ !Client(~sess, $Server, msg), !ActiveCompromise($Server), In(m) ]
+  --[ AdversaryActivity() ]->
+  [ !Server(~sess, $Server, m) ]
+
+lemma SecureChannelClientSources[sources]:
+  "All m #t. ClientSent(m) @ #t
+    ==>   (Ex #x. ClientSend(m) @ #x)
+        | (Ex #x. KU(m) @ #x & #x < #t)"
+
+lemma SecureChannelServerSources[sources]:
+  "All m #t. ServerSent(m) @ #t
+    ==>   (Ex #x. ServerSend(m) @ #x)
+        | (Ex #x. KU(m) @ #x & #x < #t)"
