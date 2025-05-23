@@ -52,20 +52,17 @@ rule Register_Newsroom_Key [color=#FF7F50]:
 //   [ Out(~ltk) ]
 
 rule Register_Source_Passphrase [color=#FF7F50]:
-  let s_fetching_sk = kdf(<'FETCHING', ~passphrase>)
-      s_pke_sk = kdf(<'PKE', ~passphrase>)
-      s_apke_sk = kdf(<'APKE', ~passphrase>)
-      s_fetching_pk = 'g'^s_fetching_sk
-      s_pke_pk = pk(s_pke_sk)
-      s_apke_pk = pqpk(s_apke_sk)
+  let s_fetching_pk = 'g'^~s_fetching_sk
+      s_pke_pk = pk(~s_pke_sk)
+      s_apke_pk = pqpk(~s_apke_sk)
   in
-  [ Fr(~passphrase) ]
+  [ Fr(~s_fetching_sk), Fr(~s_pke_sk), Fr(~s_apke_sk) ]
   --[ Honest(s_pke_pk)
     , Honest(s_apke_pk)
     , PrePQAttack() ]->
-  [ !Ltk_Source($A, s_fetching_sk, s_pke_pk, s_apke_sk)
-  , !NonPQSecKey(s_fetching_sk)
-  , !NonPQSecKey(s_pke_pk)
+  [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
+  , !NonPQSecKey(~s_fetching_sk)
+  , !NonPQSecKey(~s_pke_sk)
   , Out(<s_fetching_pk, s_pke_pk, s_apke_pk>) ]
 
 // rule Reveal_Source_DH_Key [color=#FF6961]:
@@ -183,15 +180,15 @@ rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
 // SOURCE MODEL
 // Sending
 rule Source_Send [color=#6495ED]:
-  let s_apke_pk = pqpk(s_apke_sk)
+  let s_apke_pk = pqpk(~s_apke_sk)
       pt = <'submission', ~msg>
-      ct1 = APKE_Enc(s_apke_sk, j_eapke_pk, pt)
-      ct2 = PKE_Enc(j_epke_pk, <'pk', 'g'^s_fetching_sk, pk(s_pke_sk), s_apke_pk>)
+      ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, pt)
+      ct2 = PKE_Enc(j_epke_pk, <'pk', 'g'^~s_fetching_sk, pk(~s_pke_sk), s_apke_pk>)
       j_fetching_pk = 'g'^k
       ct3 = j_fetching_pk^~x
       ct4 = 'g'^~x
   in
-  [ !Ltk_Source($S, s_fetching_sk, s_pke_sk, s_apke_sk)
+  [ !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk, j_epke_pk, j_eapke_pk, sig_je_pk>)
   , Fr(~sess), Fr(~x), Fr(~msg), Fr(~id) ]
@@ -212,18 +209,18 @@ rule Source_Send [color=#6495ED]:
 
 // Receiving
 rule Source_Query [color=#6495ED]:
-  [ !Ltk_Source($S, s_fetching_sk, s_pke_sk, s_apke_sk)
+  [ !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , Fr(~sess) ]
   --[ ClientSource('request') ]->
   [ Client_Out(~sess, $NR, 'request')
-  , SourceQueried($S, $NR, ~sess, s_fetching_sk) ]
+  , SourceQueried($S, $NR, ~sess, ~s_fetching_sk) ]
 
 rule Source_ChallengeResponse [color=#6495ED]:
   let challenge_key = 'g'^k
   in
-  [ SourceQueried($S, $NR, ~sess, s_fetching_sk)
-  , Client_In(~sess, $NR, <challenge_key, senc(id, challenge_key^s_fetching_sk)>) ]
+  [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
+  , Client_In(~sess, $NR, <challenge_key, senc(id, challenge_key^~s_fetching_sk)>) ]
   -->
   [ Client_Out(~sess, $NR, id)
   , SourceResponded($S, $NR, ~sess) ]
@@ -235,12 +232,12 @@ rule Source_Recv [color=#6495ED]:
   , Client_In(~sess, $NR, <ct1, ct2>)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk>)
   , !APKE_MessageSpace(pt)
-  , !Ltk_Source($S, s_fetching_sk, s_pke_sk, s_apke_sk)
+  , !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk) ]
-  --[ APKE_Dec(ct1, j_apke_pk, s_apke_sk, pt)
+  --[ APKE_Dec(ct1, j_apke_pk, ~s_apke_sk, pt)
     , Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
       // Actions for Lemmas
-    , Source_Received(pqpk(s_apke_sk), j_apke_pk, $NR, m)
+    , Source_Received(pqpk(~s_apke_sk), j_apke_pk, $NR, m)
     , PrePQAttack()
     ]->
   []
