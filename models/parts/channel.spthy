@@ -25,12 +25,14 @@ rule AdversaryClientOut[color=#FF6961]:
 
 rule ServerCompromise:
   [ !SecureDropInstance($Server) ]
-  --[ AdversaryActivity() ]->
-  [ !ActiveCompromise($Server), !PassiveCompromise($Server) ]
+  --[ AdversaryActivity()
+    , SecureDropInstanceCompromise($Server) ]->
+  [ !ActiveCompromise($Server) ]
 
 rule Snapshot:
   [ !SecureDropInstance($Server) ]
-  --[ AdversaryActivity() ]->
+  --[ AdversaryActivity()
+    , SecureDropInstanceReadAccess($Server) ]->
   [ !PassiveCompromise($Server) ]
 
 rule ServerToAdversaryClient[color=#FF6961]:
