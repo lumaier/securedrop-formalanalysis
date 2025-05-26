@@ -205,7 +205,8 @@ rule Source_Query [color=#6495ED]:
   [ !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , Fr(~sess) ]
-  --[ ClientSource('request') ]->
+  --[ ClientSource('request')
+    , PrePQAttack() ]->
   [ Client_Out(~sess, $NR, 'request')
   , SourceQueried($S, $NR, ~sess, ~s_fetching_sk) ]
 
@@ -214,7 +215,7 @@ rule Source_ChallengeResponse [color=#6495ED]:
   in
   [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
   , Client_In(~sess, $NR, <challenge_key, senc(id, challenge_key^~s_fetching_sk)>) ]
-  -->
+  --[ PrePQAttack() ]->
   [ Client_Out(~sess, $NR, id)
   , SourceResponded($S, $NR, ~sess) ]
 
@@ -240,7 +241,8 @@ rule Source_Recv [color=#6495ED]:
 rule Journalist_Query [color=#6495ED]:
   [ !Journalist_Enrolled($NR, $J)
   , Fr(~sess) ]
-  --[ ClientSource('request') ]->
+  --[ ClientSource('request')
+    , PrePQAttack() ]->
   [ Client_Out(~sess, $NR, 'request')
   , JournalistQueried($J, $NR, ~sess) ]
 
@@ -248,7 +250,7 @@ rule Journalist_ChallengeResponse [color=#6495ED]:
   [ JournalistQueried($J, $NR, ~sess)
   , !Ltk_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Client_In(~sess, $NR, <challenge_key, senc(id, challenge_key^~j_fetching_sk)>) ]
-  -->
+  --[ PrePQAttack() ]->
   [ Client_Out(~sess, $NR, id)
   , JournalistResponded($J, $NR, ~sess) ]
 
@@ -300,7 +302,8 @@ rule ServerChallenge:
   , !Submission($NR, ~id, <ct1, ct2, ss, pk>)
   , Fr(~r), Fr(~chall) ]
   --[ ServerSource(<pk^~r, senc(~chall, ss^~r)>)
-    , ClientSource(~chall) ]->
+    , ClientSource(~chall)
+    , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <pk^~r, senc(~chall, ss^~r)>)
   , Challenged($NR, ~sess, ~id, ~chall, ct1, ct2) ]
 
@@ -308,7 +311,8 @@ rule ServerChallengeSuccess:
   [ Challenged($NR, ~sess, ~id, ~chall, ct1, ct2)
   , FetchToken(~id)
   , Server_In(~sess, $NR, ~chall) ]
-  --[ Fetched(~id) ]->
+  --[ Fetched(~id)
+    , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <ct1, ct2>) ]
 
 rule AdversarySubmit:
