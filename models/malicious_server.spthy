@@ -4,11 +4,12 @@ begin
 /*
 Color semantics:
 
-- Yellow (#FDFD96)      Key setup/distribution
-- Red (#FF6961)         Adversary activity
-- Light blue (#B4D9EF)  Message Fetching
-- Dark blue (#6495ED)   Messaging
-- Orange (#FF7F50)      Registration/Enrollment
+- Yellow (#ffee00)      Key setup/distribution
+- Red (#ff6961)         Adversary activity
+- White (#ffffff)       Secure channel
+- Dark blue (#0a0aff)   Source
+- Green (#58a820)       Journalist
+- Purple (#c24bb8)      Server
 */
 
 builtins: symmetric-encryption, diffie-hellman, signing
@@ -23,17 +24,17 @@ equations: APKE_Dec(APKE_Enc(skS, pk(skR1), pk(skR2), m), skR1, skR2) = m,
 #include "parts/channel.spthy"
 
 // PQ Attacker
-rule PQAttackerStart[color=#FF6961]:
+rule PQAttackerStart[color=#ff6961]:
   [] --[ PQAttack(), AdversaryActivity() ]-> [ !PQAttacker() ]
 
-rule PQAttacker[color=#FF6961]:
+rule PQAttacker[color=#ff6961]:
   [ !PQAttacker(), !NonPQSecKey(k) ] --> [ Out(k) ]
 
 restriction PQAttacker:
   "All #compr #t. PQAttack() @ #compr & PrePQAttack() @ #t ==> #t < #compr"
 
 // Key Registration
-rule Register_Newsroom_Key [color=#FF7F50]:
+rule Register_Newsroom_Key[color=#ffee00]:
   let public_key = pk(~ltk) in
   [ Fr(~ltk) ]
   --[ PrePQAttack()
@@ -44,13 +45,13 @@ rule Register_Newsroom_Key [color=#FF7F50]:
   , Out(public_key)
   , !NonPQSecKey(~ltk) ]
 
-rule Reveal_Newsroom_Key [color=#FF6961]:
+rule Reveal_Newsroom_Key[color=#ff6961]:
   [ !Ltk_Newsroom($NR, ~ltk) ]
   --[ Reveal_Newsroom_Key($NR)
     , AdversaryActivity() ]->
   [ Out(~ltk) ]
 
-rule Register_Source_Passphrase [color=#FF7F50]:
+rule Register_Source_Passphrase[color=#ffee00]:
   let s_fetching_pk = 'g'^~s_fetching_sk
       s_pke_pk = pk(~s_pke_sk)
       s_apke_pk = pk(~s_apke_sk)
@@ -62,7 +63,7 @@ rule Register_Source_Passphrase [color=#FF7F50]:
   , !NonPQSecKey(~s_pke_sk)
   , Out(<s_fetching_pk, s_pke_pk, s_apke_pk>) ]
 
-rule Reveal_Source_Fetching [color=#FF6961]:
+rule Reveal_Source_Fetching[color=#ff6961]:
   let s_dh_pk = 'g'^s_dh_sk
   in
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
@@ -70,7 +71,7 @@ rule Reveal_Source_Fetching [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~s_fetching_sk) ]
 
-rule Reveal_Source_PKE [color=#FF6961]:
+rule Reveal_Source_PKE[color=#ff6961]:
   let s_pke_pk = pk(~s_pke_sk)
   in
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
@@ -78,7 +79,7 @@ rule Reveal_Source_PKE [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~s_pke_sk) ]
 
-rule Reveal_Source_APKE [color=#FF6961]:
+rule Reveal_Source_APKE[color=#ff6961]:
   let s_apke_pk = pk(~s_apke_sk)
   in
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
@@ -88,7 +89,7 @@ rule Reveal_Source_APKE [color=#FF6961]:
 
 // Journalist Enrollment
 
-rule Journalist_Enrollment [color=#FF7F50]:
+rule Journalist_Enrollment[color=#ffee00]:
   let j_sig_pk = pk(~j_sig_sk)
       j_fetching_pk = 'g'^~j_fetching_sk
       j_apke_pk = pk(~j_apke_sk)
@@ -109,7 +110,7 @@ rule Journalist_Enrollment [color=#FF7F50]:
   , !NonPQSecKey(~j_sig_sk)
   , !NonPQSecKey(~j_fetching_sk) ]
 
-rule Reveal_Journalist_SIG_Key [color=#FF6961]:
+rule Reveal_Journalist_SIG_Key[color=#ff6961]:
   let j_sig_pk = pk(~j_sig_sk)
   in
   [ !Ltk_Journalist_SIG_Key($A, ~j_sig_sk) ]
@@ -117,7 +118,7 @@ rule Reveal_Journalist_SIG_Key [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~j_sig_sk) ]
 
-rule Reveal_Journalist_Fetching [color=#FF6961]:
+rule Reveal_Journalist_Fetching[color=#ff6961]:
   let j_dh_pk = 'g'^~j_fetching_sk
   in
   [ !Ltk_Journalist_FETCHING_Key($A, ~j_fetching_sk) ]
@@ -125,7 +126,7 @@ rule Reveal_Journalist_Fetching [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~j_fetching_sk) ]
 
-rule Reveal_Journalist_APKE [color=#FF6961]:
+rule Reveal_Journalist_APKE[color=#ff6961]:
   let j_apke_pk = pk(~j_apke_sk)
   in
   [ !Ltk_Journalist_APKE_Key($A, ~j_apke_sk) ]
@@ -133,7 +134,7 @@ rule Reveal_Journalist_APKE [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~j_apke_sk) ]
 
-rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
+rule Journalist_Register_Ephemeral_Key[color=#ffee00]:
   let j_epke_pk = pk(~j_epke_sk)
       j_eapke_pk = pk(~j_eapke_sk)
       sig_je_pk = sign(<'ephemeral', j_epke_pk, j_eapke_pk>, ~j_sig_sk)
@@ -147,7 +148,7 @@ rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   , !Journalist_Ephemeral_Key_Reveal($J, ~j_epke_sk, ~j_eapke_sk)
   , !NonPQSecKey(~j_epke_sk) ]
 
-rule Reveal_Journalist_EPKE [color=#FF6961]:
+rule Reveal_Journalist_EPKE[color=#ff6961]:
   let j_epke_pk = pk(~j_epke_sk)
   in
   [ !Journalist_Ephemeral_Key_Reveal($J, ~j_epke_sk, ~j_eapke_sk) ]
@@ -155,7 +156,7 @@ rule Reveal_Journalist_EPKE [color=#FF6961]:
     , AdversaryActivity() ]->
   [ Out(~j_epke_sk) ]
 
-rule Reveal_Journalist_EAPKE [color=#FF6961]:
+rule Reveal_Journalist_EAPKE[color=#ff6961]:
   let j_apke_pk = pk(~j_eapke_sk)
   in
   [ !Journalist_Ephemeral_Key_Reveal($J, ~j_epke_sk, ~j_eapke_sk) ]
@@ -165,7 +166,7 @@ rule Reveal_Journalist_EAPKE [color=#FF6961]:
 
 // SOURCE MODEL
 // Sending
-rule Source_Send [color=#6495ED]:
+rule Source_Send[color=#58a820]:
   let s_apke_pk = pk(~s_apke_sk)
       pt1 = <'submission', ~msg>
       ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, j_epke_pk, pt1)
@@ -194,7 +195,7 @@ rule Source_Send [color=#6495ED]:
   , !NonPQSecKey(~x) ]
 
 // Receiving
-rule Source_Query [color=#6495ED]:
+rule Source_Query[color=#58a820]:
   [ !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk)
   , Fr(~sess) ]
@@ -203,7 +204,7 @@ rule Source_Query [color=#6495ED]:
   [ Client_Out(~sess, $NR, 'request')
   , SourceQueried($S, $NR, ~sess, ~s_fetching_sk) ]
 
-rule Source_ChallengeResponse [color=#6495ED]:
+rule Source_ChallengeResponse[color=#58a820]:
   let challenge_key = 'g'^k
   in
   [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
@@ -212,7 +213,7 @@ rule Source_ChallengeResponse [color=#6495ED]:
   [ Client_Out(~sess, $NR, id)
   , SourceResponded($S, $NR, ~sess) ]
 
-rule Source_Recv [color=#6495ED]:
+rule Source_Recv[color=#58a820]:
   let pt1 = <'submission', m>
       ct1 = APKE_Enc(skR, pk(~s_apke_sk), pk(~s_pke_sk), pt1)
   in
@@ -231,7 +232,7 @@ rule Source_Recv [color=#6495ED]:
 
 // JOURNALISTS
 // Receiving
-rule Journalist_Query [color=#6495ED]:
+rule Journalist_Query[color=#0a0aff]:
   [ !Journalist_Enrolled($NR, $J)
   , Fr(~sess) ]
   --[ ClientSource('request')
@@ -239,7 +240,7 @@ rule Journalist_Query [color=#6495ED]:
   [ Client_Out(~sess, $NR, 'request')
   , JournalistQueried($J, $NR, ~sess) ]
 
-rule Journalist_ChallengeResponse [color=#6495ED]:
+rule Journalist_ChallengeResponse[color=#0a0aff]:
   [ JournalistQueried($J, $NR, ~sess)
   , !Ltk_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Client_In(~sess, $NR, <challenge_key, senc(id, challenge_key^~j_fetching_sk)>) ]
@@ -247,7 +248,7 @@ rule Journalist_ChallengeResponse [color=#6495ED]:
   [ Client_Out(~sess, $NR, id)
   , JournalistResponded($J, $NR, ~sess) ]
 
-rule Journalist_Recv [color=#6495ED,derivchecks]:
+rule Journalist_Recv[color=#0a0aff,derivchecks]:
   let pt1 = <'submission', m>
       ct1 = APKE_Enc(skR, pk(~j_eapke_sk), pk(~j_epke_pk), pt1)
       s_fetching_pk = 'g'^k
@@ -264,7 +265,7 @@ rule Journalist_Recv [color=#6495ED,derivchecks]:
   [ Journalist_Recv($J, s_fetching_pk, s_pke_pk, s_apke_pk) ]
 
 // Sending
-rule Journalist_Send [color=#6495ED]:
+rule Journalist_Send[color=#0a0aff]:
   let j_apke_pk = pk(~j_apke_sk)
       pt = <'submission', ~msg>
       ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, s_pke_pk, pt)
@@ -287,7 +288,7 @@ rule Journalist_Send [color=#6495ED]:
 
 // SECUREDROP INSTANCE
 
-rule ServerChallenge:
+rule ServerChallenge[color=#c24bb8]:
   let pk = 'g'^k1
       ss = 'g'^k2
   in
@@ -300,7 +301,7 @@ rule ServerChallenge:
   [ Server_Out(~sess, $NR, <pk^~r, senc(~chall, ss^~r)>)
   , Challenged($NR, ~sess, ~id, ~chall, ct1, ct2) ]
 
-rule ServerChallengeSuccess:
+rule ServerChallengeSuccess[color=#c24bb8]:
   [ Challenged($NR, ~sess, ~id, ~chall, ct1, ct2)
   , FetchToken(~id)
   , Server_In(~sess, $NR, ~chall) ]
@@ -308,14 +309,14 @@ rule ServerChallengeSuccess:
     , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <ct1, ct2>) ]
 
-rule AdversarySubmit:
+rule AdversarySubmit[color=#ff6961]:
   [ In(cts), Fr(~id) ]
   --[ Submitted(cts)
     , AdversaryActivity() ]->
   [ !Submission($NR, ~id, cts)
   , FetchToken(~id) ]
 
-rule SubmissionAccess:
+rule SubmissionAccess[color=#ff6961]:
   [ !PassiveCompromise($NR), !Submission($NR, ~id, cts) ]
   --[ SubmissionSources(cts)
     , DBRead(~id)

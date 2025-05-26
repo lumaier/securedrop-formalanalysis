@@ -1,53 +1,53 @@
-rule ClientOut[color=#FFFFFF]:
+rule ClientOut[color=#ffffff]:
   [ Client_Out(~sess, $Server, msg), !SecureDropInstance($Server) ]
   -->
   [ !Client(~sess, $Server, msg) ]
 
-rule ServerOut[color=#FFFFFF]:
+rule ServerOut[color=#ffffff]:
   [ Server_Out(~sess, $Server, msg), !SecureDropInstance($Server) ]
   -->
   [ !Server(~sess, $Server, msg) ]
 
-rule ClientToServer[color=#FFFFFF]:
+rule ClientToServer[color=#ffffff]:
   [ !Client(~sess, $Server, msg) ]
   -->
   [ Server_In(~sess, $Server, msg) ]
 
-rule ServerToClient[color=#FFFFFF]:
+rule ServerToClient[color=#ffffff]:
   [ !Server(~sess, $Server, msg) ]
   -->
   [ Client_In(~sess, $Server, msg) ]
 
-rule AdversaryClientOut[color=#FF6961]:
+rule AdversaryClientOut[color=#ff6961]:
   [ In(~sess), In(msg), !SecureDropInstance($Server) ]
   -->
   [ !Client(~sess, $Server, msg) ]
 
-rule ServerCompromise:
+rule ServerCompromise[color=#ff6961]:
   [ !SecureDropInstance($Server) ]
   --[ AdversaryActivity()
     , SecureDropInstanceCompromise($Server) ]->
   [ !ActiveCompromise($Server) ]
 
-rule Snapshot:
+rule Snapshot[color=#ff6961]:
   [ !SecureDropInstance($Server) ]
   --[ AdversaryActivity()
     , SecureDropInstanceReadAccess($Server) ]->
   [ !PassiveCompromise($Server) ]
 
-rule ServerToAdversaryClient[color=#FF6961]:
+rule ServerToAdversaryClient[color=#ff6961]:
   [ In(adversarySess), !Server(adversarySess, $Server, msg) ]
   --[ AdversaryActivity()
     , ServerSources(msg) ]->
   [ Out(msg) ]
 
-rule ServerAdversaryFromClient[color=#FF6961]:
+rule ServerAdversaryFromClient[color=#ff6961]:
   [ !Client(~sess, $Server, msg), !ActiveCompromise($Server) ]
   --[ AdversaryActivity()
     , ClientSources(msg) ]->
   [ Out(msg) ]
 
-rule ServerAdversaryToClient[color=#FF6961]:
+rule ServerAdversaryToClient[color=#ff6961]:
   [ !Client(~sess, $Server, msg), !ActiveCompromise($Server), In(m) ]
   --[ AdversaryActivity() ]->
   [ !Server(~sess, $Server, m) ]
