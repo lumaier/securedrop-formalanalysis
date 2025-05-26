@@ -31,7 +31,8 @@ if argv[1] == 'SecureChannelClientSources':
     re.compile(r'Client_Out\( ~sess(\.\d*), \$Server(\.\d*), ~id(\.\d*)'),
     re.compile(r'^\(last'),
     re.compile(r'^\(∃'),
-    re.compile(r'^ClientSend'),
+    re.compile(r'^ClientSource'),
+    'KU( senc',
   ], lines)
 
 if match is not None:
