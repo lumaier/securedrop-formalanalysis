@@ -24,7 +24,7 @@ equations: APKE_Dec(APKE_Enc(skS, pqpk(skR), m), skR) = m,
 
 // PQ Attacker
 rule PQAttackerStart[color=#FF6961]:
-  [] --[ PQAttack(), SomeCompromise() ]-> [ !PQAttacker() ]
+  [] --[ PQAttack(), AdversaryActivity() ]-> [ !PQAttacker() ]
 
 rule PQAttacker[color=#FF6961]:
   [ !PQAttacker(), !NonPQSecKey(k) ] --> [ Out(k) ]
@@ -314,14 +314,16 @@ rule ServerChallengeSuccess:
 
 rule AdversarySubmit:
   [ In(cts), Fr(~id) ]
-  --[ Submitted(cts) ]->
+  --[ Submitted(cts)
+    , AdversaryActivity() ]->
   [ !Submission($NR, ~id, cts)
   , FetchToken(~id) ]
 
 rule SubmissionAccess:
   [ !PassiveCompromise($NR), !Submission($NR, ~id, cts) ]
   --[ SubmissionSources(cts)
-    , DBRead(~id) ]->
+    , DBRead(~id)
+    , AdversaryActivity() ]->
   [ Out(cts) ]
 
 restriction SubmissionAccessTime:
@@ -362,7 +364,7 @@ restriction OnlyOnce:
 // "Ex #t1 #t2 s_dh_pk j_sig_pk j_edh_pk j_ekem_pk nr m.
 //         Source_Sent(s_dh_pk, j_sig_pk, j_edh_pk, j_ekem_pk, nr, m) @ #t1
 //       & Journalist_Received(j_sig_pk, j_edh_pk, nr, s_dh_pk, m) @ #t2
-//       & (not Ex #x. SomeCompromise() @ #x)"
+//       & (not Ex #x. AdversaryActivity() @ #x)"
 
 // lemma Auto_Secrecy_Source_Message:
 // "All #t s_dh_pk j_sig_pk j_edh_pk j_ekem_pk nr m.
@@ -394,7 +396,7 @@ restriction OnlyOnce:
 // "Ex #t1 #t2 s_dh_pk s_kem_pk j_sig_pk j_dh_pk nr m_old m.
 //         Journalist_Response(j_sig_pk, j_dh_pk, nr, s_dh_pk, s_kem_pk, m_old, m) @ #t1
 //       & Source_Received(s_dh_pk, j_dh_pk, nr, m) @ #t2
-//       & (not Ex #x. SomeCompromise() @ #x)"
+//       & (not Ex #x. AdversaryActivity() @ #x)"
 
 // lemma Auto_Secrecy_Journalist_Message:
 // "All #t1 #t2 #t3 s_dh_pk s_kem_pk j_sig_pk j_edh_pk j_ekem_pk j_dh_pk nr m_old m.
