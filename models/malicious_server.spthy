@@ -15,9 +15,9 @@ builtins: symmetric-encryption, diffie-hellman, signing
 
 heuristic: o "./oracles/oracle.py"
 
-functions: kdf/1, pqpk/1, bot/0, APKE_Enc/3, APKE_Dec/2, APKE_Vfy/2, PKE_Enc/2, PKE_Dec/2
-equations: APKE_Dec(APKE_Enc(skS, pqpk(skR), m), skR) = m,
-  APKE_Vfy(APKE_Enc(skS, pkrR, m), pk(skS)) = true,
+functions: kdf/1, pqpk/1, bot/0, APKE_Enc/4, APKE_Dec/3, APKE_Vfy/2, PKE_Enc/2, PKE_Dec/2
+equations: APKE_Dec(APKE_Enc(skS, pqpk(skR1), pk(skR2), m), skR1, skr2) = m,
+  APKE_Vfy(APKE_Enc(skS, pkR1, pkR2, m), pk(skS)) = true,
   PKE_Dec(PKE_Enc(pk(skR), m), skR) = m
 
 #include "parts/channel.spthy"
@@ -176,7 +176,7 @@ rule Reveal_Journalist_EAPKE [color=#FF6961]:
 rule Source_Send [color=#6495ED]:
   let s_apke_pk = pqpk(~s_apke_sk)
       pt1 = <'submission', ~msg>
-      ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, pt1)
+      ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, j_epke_pk, pt1)
       pt2 = <'pk', 'g'^~s_fetching_sk, pk(~s_pke_sk), s_apke_pk>
       ct2 = PKE_Enc(j_epke_pk, pt2)
       j_fetching_pk = 'g'^k
@@ -221,7 +221,7 @@ rule Source_ChallengeResponse [color=#6495ED]:
 
 rule Source_Recv [color=#6495ED]:
   let pt1 = <'submission', m>
-      ct1 = APKE_Enc(skR, pk(~s_apke_sk), pt1)
+      ct1 = APKE_Enc(skR, pqpk(~s_apke_sk), pk(~s_pke_sk), pt1)
   in
   [ SourceResponded($S, $NR, ~sess)
   , Client_In(~sess, $NR, <ct1, ct2>)
@@ -256,7 +256,7 @@ rule Journalist_ChallengeResponse [color=#6495ED]:
 
 rule Journalist_Recv [color=#6495ED,derivchecks]:
   let pt1 = <'submission', m>
-      ct1 = APKE_Enc(skR, pk(~j_eapke_sk), pt1)
+      ct1 = APKE_Enc(skR, pqpk(~j_eapke_sk), pk(~j_epke_pk), pt1)
       s_fetching_pk = 'g'^k
       pt2 = <'pk', s_fetching_pk, s_pke_pk, s_apke_pk>
   in
@@ -274,7 +274,7 @@ rule Journalist_Recv [color=#6495ED,derivchecks]:
 rule Journalist_Send [color=#6495ED]:
   let j_apke_pk = pqpk(~j_apke_sk)
       pt = <'submission', ~msg>
-      ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, pt)
+      ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, s_pke_pk, pt)
       ct3 = s_fetching_pk^~x
       ct4 = 'g'^~x
   in
