@@ -15,8 +15,8 @@ builtins: symmetric-encryption, diffie-hellman, signing
 
 heuristic: o "./oracles/oracle.py"
 
-functions: kdf/1, pqpk/1, bot/0, APKE_Enc/4, APKE_Dec/3, APKE_Vfy/2, PKE_Enc/2, PKE_Dec/2
-equations: APKE_Dec(APKE_Enc(skS, pqpk(skR1), pk(skR2), m), skR1, skr2) = m,
+functions: kdf/1, bot/0, APKE_Enc/4, APKE_Dec/3, APKE_Vfy/2, PKE_Enc/2, PKE_Dec/2
+equations: APKE_Dec(APKE_Enc(skS, pk(skR1), pk(skR2), m), skR1, skr2) = m,
   APKE_Vfy(APKE_Enc(skS, pkR1, pkR2, m), pk(skS)) = true,
   PKE_Dec(PKE_Enc(pk(skR), m), skR) = m
 
@@ -53,7 +53,7 @@ rule Reveal_Newsroom_Key [color=#FF6961]:
 rule Register_Source_Passphrase [color=#FF7F50]:
   let s_fetching_pk = 'g'^~s_fetching_sk
       s_pke_pk = pk(~s_pke_sk)
-      s_apke_pk = pqpk(~s_apke_sk)
+      s_apke_pk = pk(~s_apke_sk)
   in
   [ Fr(~s_fetching_sk), Fr(~s_pke_sk), Fr(~s_apke_sk) ]
   --[ PrePQAttack() ]->
@@ -81,7 +81,7 @@ rule Reveal_Source_PKE [color=#FF6961]:
   [ Out(~s_pke_sk) ]
 
 rule Reveal_Source_APKE [color=#FF6961]:
-  let s_apke_pk = pqpk(~s_apke_sk)
+  let s_apke_pk = pk(~s_apke_sk)
   in
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
   --[ Reveal_Source_KEM($A)
@@ -94,7 +94,7 @@ rule Reveal_Source_APKE [color=#FF6961]:
 rule Journalist_Enrollment [color=#FF7F50]:
   let j_sig_pk = pk(~j_sig_sk)
       j_fetching_pk = 'g'^~j_fetching_sk
-      j_apke_pk = pqpk(~j_apke_sk)
+      j_apke_pk = pk(~j_apke_sk)
       sig_j_pk = sign(<'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, ~nr_sk)
   in
   [ !Ltk_Newsroom($NR, ~nr_sk)
@@ -131,7 +131,7 @@ rule Reveal_Journalist_Fetching [color=#FF6961]:
   [ Out(~j_fetching_sk) ]
 
 rule Reveal_Journalist_APKE [color=#FF6961]:
-  let j_apke_pk = pqpk(~j_apke_sk)
+  let j_apke_pk = pk(~j_apke_sk)
   in
   [ !Ltk_Journalist_APKE_Key($A, ~j_apke_sk) ]
   --[ Reveal_Journalist_APKE($A)
@@ -141,7 +141,7 @@ rule Reveal_Journalist_APKE [color=#FF6961]:
 
 rule Journalist_Register_Ephemeral_Key [color=#FF7F50]:
   let j_epke_pk = pk(~j_epke_sk)
-      j_eapke_pk = pqpk(~j_eapke_sk)
+      j_eapke_pk = pk(~j_eapke_sk)
       sig_je_pk = sign(<'ephemeral', j_epke_pk, j_eapke_pk>, ~j_sig_sk)
   in
   [ !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
@@ -163,7 +163,7 @@ rule Reveal_Journalist_EPKE [color=#FF6961]:
   [ Out(~j_epke_sk) ]
 
 rule Reveal_Journalist_EAPKE [color=#FF6961]:
-  let j_apke_pk = pqpk(~j_eapke_sk)
+  let j_apke_pk = pk(~j_eapke_sk)
   in
   [ !Journalist_Ephemeral_Key_Reveal($J, ~j_epke_sk, ~j_eapke_sk) ]
   --[ Reveal_Journalist_APKE($A)
@@ -174,7 +174,7 @@ rule Reveal_Journalist_EAPKE [color=#FF6961]:
 // SOURCE MODEL
 // Sending
 rule Source_Send [color=#6495ED]:
-  let s_apke_pk = pqpk(~s_apke_sk)
+  let s_apke_pk = pk(~s_apke_sk)
       pt1 = <'submission', ~msg>
       ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, j_epke_pk, pt1)
       pt2 = <'pk', 'g'^~s_fetching_sk, pk(~s_pke_sk), s_apke_pk>
@@ -221,7 +221,7 @@ rule Source_ChallengeResponse [color=#6495ED]:
 
 rule Source_Recv [color=#6495ED]:
   let pt1 = <'submission', m>
-      ct1 = APKE_Enc(skR, pqpk(~s_apke_sk), pk(~s_pke_sk), pt1)
+      ct1 = APKE_Enc(skR, pk(~s_apke_sk), pk(~s_pke_sk), pt1)
   in
   [ SourceResponded($S, $NR, ~sess)
   , Client_In(~sess, $NR, <ct1, ct2>)
@@ -231,7 +231,7 @@ rule Source_Recv [color=#6495ED]:
   --[ Eq(APKE_Vfy(ct1, j_apke_pk), true)
     , Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
       // Actions for Lemmas
-    , Source_Received(pqpk(~s_apke_sk), j_apke_pk, $NR, m)
+    , Source_Received(pk(~s_apke_sk), j_apke_pk, $NR, m)
     , PrePQAttack()
     ]->
   []
@@ -256,7 +256,7 @@ rule Journalist_ChallengeResponse [color=#6495ED]:
 
 rule Journalist_Recv [color=#6495ED,derivchecks]:
   let pt1 = <'submission', m>
-      ct1 = APKE_Enc(skR, pqpk(~j_eapke_sk), pk(~j_epke_pk), pt1)
+      ct1 = APKE_Enc(skR, pk(~j_eapke_sk), pk(~j_epke_pk), pt1)
       s_fetching_pk = 'g'^k
       pt2 = <'pk', s_fetching_pk, s_pke_pk, s_apke_pk>
   in
@@ -265,14 +265,14 @@ rule Journalist_Recv [color=#6495ED,derivchecks]:
   , Client_In(~sess, $NR, <ct1, PKE_Enc(pk(~j_pke_sk), pt2)>) ]
   --[ Eq(APKE_Vfy(ct1, s_apke_pk), true)
       // Actions for Lemmas
-    , Journalist_Received(pqpk(~j_eapke_sk), $NR, s_apke_pk, m)
+    , Journalist_Received(pk(~j_eapke_sk), $NR, s_apke_pk, m)
     , PrePQAttack()
     ]->
   [ Journalist_Recv($J, s_fetching_pk, s_pke_pk, s_apke_pk) ]
 
 // Sending
 rule Journalist_Send [color=#6495ED]:
-  let j_apke_pk = pqpk(~j_apke_sk)
+  let j_apke_pk = pk(~j_apke_sk)
       pt = <'submission', ~msg>
       ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, s_pke_pk, pt)
       ct3 = s_fetching_pk^~x
