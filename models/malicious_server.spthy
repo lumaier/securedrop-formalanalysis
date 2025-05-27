@@ -382,7 +382,7 @@ lemma SourceSubmission_Secrecy:
         | ( ( (Ex #x #y. Fetched(id) @ #x
                 & Reveal_Journalist_Fetching(j_fetching_pk) @ #y & #y < #x)
             | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)
-            | (Ex #x. SecureDropInstanceCompromise(nr) @ #x & #x < #t))
+            | (Ex #x. SecureDropInstanceCompromise(nr) @ #x))
           & (Ex #x. Reveal_Journalist_EAPKE(j_eapke_pk) @ #x)
           & ( (Ex #x. Reveal_Journalist_EPKE(j_epke_pk) @ #x)
             | (Ex #x. PQAttack() @ #x)))"
