@@ -34,6 +34,18 @@ if argv[1] == 'SecureChannelClientSources':
     re.compile(r'^ClientSource'),
     'KU( senc',
   ], lines)
+elif argv[1] == 'SourceSubmission_Secrecy':
+  match = matchAgainstList([
+    '!KU( ~chall )',
+    '!KU( ~j_fetching',
+    '!KU( ~r',
+    '!KU( ~x',
+    'splitEqs',
+    '!KU( \'g\'^(~j_fetching_sk*~r*~x) ) @ #vk.21',
+    re.compile(r'!KU\( senc.+\) @ #vk\.21'),
+    re.compile(r'!KU\( senc.+\) @ #vk\.\d+'),
+    re.compile(r'Client_In\(.+\) ▶. #vr\.23'),
+  ], lines)
 
 if match is not None:
   print(match)
