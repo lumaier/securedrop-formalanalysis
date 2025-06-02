@@ -337,18 +337,16 @@ lemma Submissions[sources]:
     ==>   (Ex #x. SubmissionSource(cts) @ #x)
         | (Ex #x. KU(cts) @ #x & #x < #t)"
 
-lemma SecureChannelClientSources[sources]:
-  "All m #t. ClientSources(m) @ #t
+lemma SecureChannelSources[sources]:
+  "(All m #t. ClientSources(m) @ #t
     ==>   (Ex #x. ClientSource(m) @ #x)
-        | (Ex #x. KU(m) @ #x & #x < #t)"
-
-lemma SecureChannelServerSources[sources]:
-  "All m #t. ServerSources(m) @ #t
+        | (Ex #x. KU(m) @ #x & #x < #t))
+  & (All m #t. ServerSources(m) @ #t
     ==>   (Ex #x. ServerSource(m) @ #x)
         | (Ex ct1 ct2 #x1 #x2. m = <ct1, ct2>
             & KU(ct1) @ #x1 & #x1 < #t
             & KU(ct2) @ #x2 & #x2 < #t)
-        | (Ex #x. KU(m) @ #x & #x < #t)"
+        | (Ex #x. KU(m) @ #x & #x < #t))"
 
 restriction Eq:
   "All t1 t2 #x. Eq(t1, t2) @ #x ==> t1 = t2"

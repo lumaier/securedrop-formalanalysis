@@ -26,12 +26,14 @@ def matchAgainstList(priorityList, lines):
       pass
 
 match = None
-if argv[1] == 'SecureChannelClientSources':
+if argv[1] == 'SecureChannelSources':
   match = matchAgainstList([
-    re.compile(r'Client_Out\( ~sess(\.\d*), \$Server(\.\d*), ~id(\.\d*)'),
-    re.compile(r'^\(last'),
+    '~~>',
     re.compile(r'^\(∃'),
-    re.compile(r'^ClientSource'),
+    re.compile(r'Client_Out\( ~sess(\.\d*), \$Server(\.\d*), ~id(\.\d*)'),
+    '!Submission',
+    re.compile(r'^\(last'),
+    re.compile(r'^(Client|Server)Source'),
     'KU( senc',
   ], lines)
 elif argv[1] == 'SourceSubmission_Secrecy':
