@@ -188,7 +188,7 @@ rule Source_Send[color=#58a820]:
   [ !Submission($NR, ~id, <ct1, ct2, ct3, ct4>)
   , FetchToken(~id)
   , !APKE_MessageSpace(pt1)
-  , !PKE_MessageSpace(pt1)
+  , !PKE_MessageSpace(pt2)
   , !NonPQSecKey(~x) ]
 
 // Receiving
