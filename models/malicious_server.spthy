@@ -1,26 +1,13 @@
 theory SecureDrop
 begin
 
-/*
-Color semantics:
-
-- Yellow (#ffee00)      Key setup/distribution
-- Red (#ff6961)         Adversary activity
-- White (#ffffff)       Secure channel
-- Dark blue (#0a0aff)   Source
-- Green (#58a820)       Journalist
-- Purple (#c24bb8)      Server
-*/
-
 builtins: symmetric-encryption, diffie-hellman, signing
 
 heuristic: o "./oracles/oracle.py"
 
-functions: kdf/1, bot/0, APKE_Enc/4, APKE_Dec/3, APKE_Vfy/2, PKE_Enc/2, PKE_Dec/2
-equations: APKE_Dec(APKE_Enc(skS, pk(skR1), pk(skR2), m), skR1, skR2) = m,
-  APKE_Vfy(APKE_Enc(skS, pkR1, pkR2, m), pk(skS)) = true,
-  PKE_Dec(PKE_Enc(pk(skR), m), skR) = m
-
+functions: kdf/1, bot/0
+#include "parts/apke.spthy"
+#include "parts/pke.spthy"
 #include "parts/channel.spthy"
 
 // PQ Attacker
@@ -57,7 +44,9 @@ rule Register_Source_Passphrase[color=#ffee00]:
       s_apke_pk = pk(~s_apke_sk)
   in
   [ Fr(~s_fetching_sk), Fr(~s_pke_sk), Fr(~s_apke_sk) ]
-  --[ PrePQAttack() ]->
+  --[ Honest(s_pke_pk)
+    , Honest(s_apke_pk)
+    , PrePQAttack() ]->
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !NonPQSecKey(~s_fetching_sk)
   , !NonPQSecKey(~s_pke_sk)
@@ -100,6 +89,7 @@ rule Journalist_Enrollment[color=#ffee00]:
   , Fr(~j_fetching_sk)
   , Fr(~j_apke_sk) ]
   --[ Journalist_Verified($NR, $J)
+    , Honest(j_apke_pk)
     , OnlyOnce($J)
     , PrePQAttack() ]->
   [ Out(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk>)
@@ -142,7 +132,9 @@ rule Journalist_Register_Ephemeral_Key[color=#ffee00]:
   [ !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
   , Fr(~j_epke_sk)
   , Fr(~j_eapke_sk) ]
-  --[ PrePQAttack() ]->
+  --[ Honest(j_epke_pk)
+    , Honest(j_eapke_pk)
+    , PrePQAttack() ]->
   [ Out(<j_epke_pk, j_eapke_pk, sig_je_pk>)
   , Journalist_Ephemeral_Key($J, ~j_epke_sk, ~j_eapke_sk)
   , !Journalist_Ephemeral_Key_Reveal($J, ~j_epke_sk, ~j_eapke_sk)
@@ -180,7 +172,8 @@ rule Source_Send[color=#58a820]:
   , !Pk_Newsroom($NR, nr_pk)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk, j_epke_pk, j_eapke_pk, sig_je_pk>)
   , Fr(~sess), Fr(~x), Fr(~msg), Fr(~id) ]
-  --[ // check signatures of journalist's longterm signature and ephemeral encryption keys
+  --[
+      // check signatures of journalist's longterm signature and ephemeral encryption keys
       Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
     , Eq(verify(sig_je_pk, <'ephemeral', j_epke_pk, j_eapke_pk>, j_sig_pk), true)
       // Actions for Lemmas
@@ -192,6 +185,8 @@ rule Source_Send[color=#58a820]:
     ]->
   [ !Submission($NR, ~id, <ct1, ct2, ct3, ct4>)
   , FetchToken(~id)
+  , !APKE_MessageSpace(pt1)
+  , !PKE_MessageSpace(pt1)
   , !NonPQSecKey(~x) ]
 
 // Receiving
@@ -221,9 +216,10 @@ rule Source_Recv[color=#58a820]:
   [ SourceResponded($S, $NR, ~sess)
   , Client_In(~sess, $NR, <ct1, ct2>)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk>)
+  , !APKE_MessageSpace(pt1)
   , !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk) ]
-  --[ Eq(APKE_Vfy(ct1, j_apke_pk), true)
+  --[ APKE_Dec(ct1, j_apke_pk, ~s_apke_sk, ~s_pke_sk, pt1)
     , Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
       // Actions for Lemmas
     , Source_Received(pk(~s_apke_sk), j_apke_pk, $NR, m)
@@ -253,15 +249,16 @@ rule Journalist_ChallengeResponse[color=#0a0aff]:
   , JournalistResponded($J, $NR, ~sess) ]
 
 rule Journalist_Recv[color=#0a0aff,derivchecks]:
-  let pt1 = <'submission', m>
-      ct1 = APKE_Enc(skR, pk(~j_eapke_sk), pk(~j_epke_pk), pt1)
-      s_fetching_pk = 'g'^k
+  let s_fetching_pk = 'g'^k
+      pt1 = <'submission', m>
       pt2 = <'pk', s_fetching_pk, s_pke_pk, s_apke_pk>
   in
   [ JournalistResponded($J, $NR, ~sess)
   , Journalist_Ephemeral_Key($J, ~j_epke_sk, ~j_eapke_sk)
-  , Client_In(~sess, $NR, <ct1, PKE_Enc(pk(~j_pke_sk), pt2)>) ]
-  --[ Eq(APKE_Vfy(ct1, s_apke_pk), true)
+  , Client_In(~sess, $NR, <ct1, ct2>)
+  , !APKE_MessageSpace(pt1), !PKE_MessageSpace(pt2) ]
+  --[ APKE_Dec(ct1, s_apke_pk, ~j_eapke_sk, ~j_epke_sk, pt1)
+    , PKE_Dec(ct2, ~j_epke_sk, pt2)
       // Actions for Lemmas
     , Journalist_Received(pk(~j_eapke_sk), $NR, s_apke_pk, m)
     , PrePQAttack()
@@ -288,6 +285,7 @@ rule Journalist_Send[color=#0a0aff]:
     ]->
   [ !Submission($NR, ~id, <ct1, '0x0', ct3, ct4>)
   , FetchToken(~id)
+  , !APKE_MessageSpace(pt)
   , !NonPQSecKey(~x) ]
 
 // SECUREDROP INSTANCE

@@ -1,0 +1,34 @@
+// Restriction-based model of authenticated encryption
+functions: APKE_Enc/4, APKE_Dec_Adversary/5
+
+// This rule is for the adversary, honest clients will use restrictions as per below
+equations: APKE_Dec_Adversary(APKE_Enc(skS, pk(skR), m), x, skR) = m
+
+rule APKE_MessageSpaceAdversary:
+  [ In(m) ] --> [ !APKE_MessageSpace(m) ]
+
+rule APKE_MessageSpaceReject:
+  [] --> [ !APKE_MessageSpace(bot) ]
+
+restriction APKE_Consistency:
+  "All ct pkS skR1 skR2 pt1 pt2 #t1 #t2.
+          APKE_Dec(ct, pkS, skR1, skR2, pt1) @ #t1
+        & APKE_Dec(ct, pkS, skR1, skR2, pt2) @ #t2
+    ==> pt1 = pt2"
+
+restriction APKE_Correctness:
+  "All skS skR1 skR2 mEnc mDec #t1 #t2 #t3 #t4.
+          APKE_Dec(APKE_Enc(skS, pk(skR1), pk(skR2), mEnc), pk(skS), skR1, skR2, mDec) @ #t1
+        & Honest(pk(skS)) @ #t2
+        & Honest(pk(skR1)) @ #t3
+        & Honest(pk(skR2)) @ #t4
+    ==> mDec = mEnc"
+
+restriction APKE_Security:
+  "All skS skR1 skR2 mEnc skAuth skDec1 skDec2 mDec #t1 #t2 #t3 #t4.
+          APKE_Dec(APKE_Enc(skS, pk(skR1), pk(skR2), mEnc), pk(skAuth), skDec1, skDec2, mDec) @ #t1
+        & Honest(pk(skAuth)) @ #t2
+        & Honest(pk(skDec1)) @ #t3
+        & Honest(pk(skDec2)) @ #t4
+        & (not (skS = skAuth) | not (skR1 = skDec1) | not (skR2 = skDec2))
+    ==> mDec = bot"
