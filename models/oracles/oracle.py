@@ -38,15 +38,33 @@ if argv[1] == 'SecureChannelSources':
   ], lines)
 elif argv[1] == 'SourceSubmission_Secrecy':
   match = matchAgainstList([
+    re.compile(r'!Submission\(.+\'g\','),
+    re.compile(r'!Submission\(.+\'g\'>'),
     '!KU( ~chall )',
+    'splitEqs(4)',
     '!KU( ~j_fetching',
+    '!KU( ~j_eapke_sk',
+    '!KU( ~j_epke_sk',
+    '!KU( ~j_sig_sk',
     '!KU( ~r',
     '!KU( ~x',
-    'splitEqs',
-    '!KU( \'g\'^(~j_fetching_sk*~r*~x) ) @ #vk.21',
-    re.compile(r'!KU\( senc.+\) @ #vk\.21'),
-    re.compile(r'!KU\( senc.+\) @ #vk\.\d+'),
-    re.compile(r'Client_In\(.+\) ▶. #vr\.23'),
+    '!KU( ~ltk',
+    '!KU( senc(~chall, kdf(<$Server',
+    '!Submission',
+    '!KU( \'g\'^(~j_fetching_sk*~r*~x) )',
+    re.compile(r'!KU\( \'g\'\^\(~x\.\d\*~x\.\d\) \)'),
+    re.compile(r'Client_Out\(.+~chall'),
+    '!Ltk',
+    '!Pk',
+    '!KU( sign(<\'ephemeral\'',
+    '!KU( sign(<\'long-term\'',
+    '!KU( ~msg',
+    '!KU( ~sess.1',
+
+    # 'splitEqs',
+    # re.compile(r'!KU\( senc.+\) @ #vk\.21'),
+    # re.compile(r'!KU\( senc.+\) @ #vk\.\d+'),
+    # re.compile(r'Client_In\(.+\) ▶. #vr\.23'),
   ], lines)
 
 if match is not None:
