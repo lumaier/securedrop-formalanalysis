@@ -183,6 +183,7 @@ rule Source_Send[color=#58a820]:
     , JournalistKeys(j_sig_pk, j_eapke_pk, j_epke_pk, j_fetching_pk)
     , SubmissionSource(<ct1, ct2, ct3, ct4>)
     , ServerSource(<ct1, ct2>)
+    , ClientSession(~sess)
     , PrePQAttack()
     ]->
   [ !Submission($NR, ~id, <ct1, ct2, ct3, ct4>)
@@ -197,7 +198,8 @@ rule Source_Query[color=#58a820]:
   , !Pk_Newsroom($NR, nr_pk)
   , Fr(~sess) ]
   --[ ClientSource('request')
-    , PrePQAttack() ]->
+    , PrePQAttack()
+    , ClientSession(~sess) ]->
   [ Client_Out(~sess, $NR, 'request')
   , SourceQueried($S, $NR, ~sess, ~s_fetching_sk) ]
 
@@ -207,7 +209,8 @@ rule Source_ChallengeResponse[color=#58a820]:
   in
   [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
   , Client_In(~sess, $NR, <challenge_pc, senc(id, challenge_key)>) ]
-  --[ PrePQAttack() ]->
+  --[ PrePQAttack()
+    , ClientSession(~sess) ]->
   [ Client_Out(~sess, $NR, id)
   , SourceResponded($S, $NR, ~sess) ]
 
@@ -225,6 +228,7 @@ rule Source_Recv[color=#58a820]:
       // Actions for Lemmas
     , Source_Received(pk(~s_apke_sk), j_apke_pk, $NR, m)
     , PrePQAttack()
+    , ClientSession(~sess)
     ]->
   []
 
@@ -234,6 +238,7 @@ rule Journalist_Query[color=#0a0aff]:
   [ !Journalist_Enrolled($NR, $J)
   , Fr(~sess) ]
   --[ ClientSource('request')
+    , ClientSession(~sess)
     , PrePQAttack() ]->
   [ Client_Out(~sess, $NR, 'request')
   , JournalistQueried($J, $NR, ~sess) ]
@@ -245,7 +250,8 @@ rule Journalist_ChallengeResponse[color=#0a0aff]:
   [ JournalistQueried($J, $NR, ~sess)
   , !Ltk_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Client_In(~sess, $NR, <challenge_pc, senc(id, challenge_key)>) ]
-  --[ PrePQAttack() ]->
+  --[ PrePQAttack()
+    , ClientSession(~sess) ]->
   [ Client_Out(~sess, $NR, id)
   , JournalistResponded($J, $NR, ~sess) ]
 
@@ -260,8 +266,9 @@ rule Journalist_Recv[color=#0a0aff,derivchecks]:
   , !APKE_MessageSpace(pt1), !PKE_MessageSpace(pt2) ]
   --[ APKE_Dec(ct1, s_apke_pk, ~j_eapke_sk, ~j_epke_sk, pt1)
     , PKE_Dec(ct2, ~j_epke_sk, pt2)
-      // Actions for Lemmas
+    // Actions for Lemmas
     , Journalist_Received(pk(~j_eapke_sk), $NR, s_apke_pk, m)
+    , ClientSession(~sess)
     , PrePQAttack()
     ]->
   [ Journalist_Recv($J, s_fetching_pk, s_pke_pk, s_apke_pk) ]
@@ -282,6 +289,7 @@ rule Journalist_Send[color=#0a0aff]:
     , ServerSource(<ct1, '0x0'>)
       // Actions for Lemmas
     , Journalist_Sent(pk(~j_apke_sk), $NR, s_apke_pk, ~msg)
+    , ClientSession(~sess)
     , PrePQAttack()
     ]->
   [ !Submission($NR, ~id, <ct1, '0x0', ct3, ct4>)
@@ -368,6 +376,9 @@ exists-trace
         Journalist_Sent(j_apke_pk, nr, s_apke_pk, m) @ #t1
       & Source_Received(s_apke_pk, j_apke_pk, nr, m) @ #t2
       & (not Ex #x. AdversaryActivity() @ #x)"
+
+lemma SessionSecrecy[reuse]:
+  "All sess #a #b. ClientSession(sess) @ #a & !KU(sess) @ #b ==> F"
 
 lemma SourceSubmission_Secrecy:
   "All id s_apke_pk j_eapke_pk nr m j_sig_pk j_epke_pk j_fetching_pk #t.
