@@ -18,3 +18,10 @@ restriction PKE_Correctness:
           PKE_Dec(PKE_Enc(pk(skR), mEnc), skR, mDec) @ #t1
         & Honest(pk(skR)) @ #t2
     ==> mDec = mEnc"
+
+restriction PKE_Authentication:
+  "All ct skR mDec #t1 #t2.
+          PKE_Dec(ct, skR, mDec) @ #t1
+        & Honest(pk(skR)) @ #t2
+    ==>   (ct = PKE_Enc(pk(skR), mDec))
+        | (mDec = bot)"
