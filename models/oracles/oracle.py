@@ -37,13 +37,21 @@ if argv[1] == 'SecureChannelSources':
     'KU( senc',
   ], lines)
 elif argv[1] == 'FetchingSecrecy':
+  lines.reverse()
   match = matchAgainstList([
+    'Honest( \'g\' )',
     re.compile(r'!Submission\(.+\'g\','),
     re.compile(r'!Submission\(.+\'g\'>'),
+
+    re.compile(r'KU\( ~(r|x|(j|s)_fetching_sk)\.?\d* \)'),
+    re.compile(r'\'g\'\^\(~[\w\d_\.]+\*~[\w\d_\.]+\*~[\w\d_\.]+\)'),
+    re.compile(r'!Submission\(.+\) ▶₁ #t'),
+    '!KU( ~chall )',
+    re.compile(r'!Submission\(.*senc\(~chall\.?\d*, kdf\(<\$Server\.?\d*,.*\)'),
     '!KU( senc(~chall',
-    re.compile(r'Client_Out\(.+~chall.3'),
-    '!KU( ~chall',
-    '!KU( ~sess',
+    'splitEqs(10)',
+    'Honest',
+    re.compile(r'Client_Out\(.+~chall'),
   ], lines)
 elif argv[1] == 'SourceSubmission_Secrecy':
   match = matchAgainstList([
