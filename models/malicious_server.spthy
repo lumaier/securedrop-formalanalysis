@@ -323,6 +323,7 @@ rule ServerChallenge[color=#c24bb8]:
   --[ ServerSource(<pk^~r, challenge>)
     , ClientSource(~chall)
     , FetchStart(~id, $NR, ~chall)
+    , ChallengeEncrypt(~id, ss^~r)
     , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <pk^~r, challenge>)
   , Challenged($NR, ~sess, ~id, ~chall, ct1, ct2) ]
@@ -410,6 +411,13 @@ lemma Journalist_Authentication[reuse]:
         | (Ex #x. Reveal_Journalist_APKE(j_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Source_APKE(s_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
+
+lemma FetchingSharedSecretSecrecy[reuse]:
+  "All id ss #t #x.
+        ( ChallengeEncrypt(id, ss) @ #t
+        & !KU(ss) @ #x)
+    ==>   (Ex #x. AdversarySubmit(id) @ #x)
+        | (Ex sk #x #y. SubmissionFor(id, pk(sk)) @ #x & !KU(sk) @ #y)"
 
 lemma FetchingSecrecy[reuse]:
   "All id nr chall #t.
