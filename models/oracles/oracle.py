@@ -31,9 +31,9 @@ if argv[1] == 'SecureChannelSources':
     '~~>',
     re.compile(r'^\(∃'),
     re.compile(r'Client_Out\( ~sess(\.\d*), \$Server(\.\d*), ~id(\.\d*)'),
-    '!Submission',
     re.compile(r'^\(last'),
     re.compile(r'^(Client|Server)Source'),
+    '!Submission',
     'KU( senc',
   ], lines)
 elif argv[1] == 'FetchingSecrecy':
@@ -83,10 +83,15 @@ elif argv[1] == 'SourceSubmission_Secrecy':
     # re.compile(r'!KU\( senc.+\) @ #vk\.\d+'),
     # re.compile(r'Client_In\(.+\) ▶. #vr\.23'),
   ], lines)
-elif argv[1] == 'Source_Authentication':
+elif argv[1] == 'Source_Authentication' or argv[1] == 'Journalist_Authentication':
   match = matchAgainstList([
     re.compile(r'!Submission\(.+\'g\','),
     re.compile(r'!Submission\(.+\'g\'>'),
+  ], lines)
+elif argv[1] == 'SessionSecrecy':
+  match = matchAgainstList([
+    re.compile(r'(Source|Journalist)(Queried|Responded)'),
+    '!KU( ~sess )',
   ], lines)
 
 if match is not None:
