@@ -322,8 +322,7 @@ rule ServerChallenge[color=#c24bb8]:
   , Fr(~r), Fr(~chall) ]
   --[ ServerSource(<pk^~r, challenge>)
     , ClientSource(~chall)
-    , FetchStart(~id, $NR, ~chall)
-    , ChallengeEncrypt(~id, ss^~r)
+    , FetchStart(~id, $NR, ~chall, ss^~r)
     , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <pk^~r, challenge>)
   , Challenged($NR, ~sess, ~id, ~chall, ct1, ct2) ]
@@ -413,15 +412,16 @@ lemma Journalist_Authentication[reuse]:
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
 
 lemma FetchingSharedSecretSecrecy[reuse]:
-  "All id ss #t #x.
-        ( ChallengeEncrypt(id, ss) @ #t
+  "All id nr chall ss #t #x.
+        ( FetchStart(id, nr, chall, ss) @ #t
         & !KU(ss) @ #x)
     ==>   (Ex #x. AdversarySubmit(id) @ #x)
-        | (Ex sk #x #y. SubmissionFor(id, pk(sk)) @ #x & !KU(sk) @ #y)"
+        | (Ex pk #x #y. SubmissionFor(id, pk) @ #x & Reveal_Fetching(pk) @ #y)
+        | (Ex pk #x. SubmissionFor(id, pk) & (not Ex #y. Honest(pk) @ #y))"
 
 lemma FetchingSecrecy[reuse]:
-  "All id nr chall #t.
-          FetchStart(id, nr, chall) @ #t
+  "All id nr chall ss #t.
+          FetchStart(id, nr, chall, ss) @ #t
     ==>   (not Ex #x. !KU(chall) @ #x)
         | (Ex #x. AdversarySubmit(id) @ #x)
         | (Ex pk #x #y. SubmissionFor(id, pk) @ #x & Reveal_Fetching(pk) @ #y)
