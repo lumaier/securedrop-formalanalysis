@@ -222,14 +222,16 @@ rule Source_ChallengeResponse[color=#58a820]:
 
 rule Source_Recv[color=#58a820]:
   let pt1 = <'submission', pk(~s_apke_sk), m>
+      pt2 = <'pk', j_apke_pk>
   in
   [ SourceResponded($S, $NR, ~sess)
   , Client_In(~sess, $NR, <ct1, ct2>)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk>)
-  , !APKE_MessageSpace(pt1)
+  , !APKE_MessageSpace(pt1), !PKE_MessageSpace(pt2)
   , !Ltk_Source($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Pk_Newsroom($NR, nr_pk) ]
   --[ APKE_Dec(ct1, j_apke_pk, ~s_apke_sk, pt1, $NR)
+    , PKE_Dec(ct2, ~s_pke_sk, pt2)
     , Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
       // Actions for Lemmas
     , Source_Received(pk(~s_apke_sk), j_apke_pk, $NR, m)
@@ -283,8 +285,10 @@ rule Journalist_Recv[color=#0a0aff,derivchecks]:
 // Sending
 rule Journalist_Send[color=#0a0aff]:
   let j_apke_pk = pk(~j_apke_sk)
-      pt = <'submission', s_apke_pk, ~msg>
-      ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, pt, $NR)
+      pt1 = <'submission', s_apke_pk, ~msg>
+      ct1 = APKE_Enc(~j_apke_sk, s_apke_pk, pt1, $NR)
+      pt2 = <'pk', j_apke_pk>
+      ct2 = PKE_Enc(s_pke_pk, pt2)
       ct3 = s_fetching_pk^~x
       ct4 = 'g'^~x
   in
@@ -292,17 +296,18 @@ rule Journalist_Send[color=#0a0aff]:
   , !Journalist_Enrolled($NR, $J)
   , !Ltk_Journalist_APKE_Key($J, ~j_apke_sk)
   , Fr(~sess), Fr(~msg), Fr(~x), Fr(~id) ]
-  --[ SubmissionSource(<ct1, '0x0', ct3, ct4>)
-    , ServerSource(<ct1, '0x0'>)
+  --[ SubmissionSource(<ct1, ct2, ct3, ct4>)
+    , ServerSource(<ct1, ct2>)
       // Actions for Lemmas
     , Journalist_Sent(pk(~j_apke_sk), $NR, s_apke_pk, ~msg)
     , ClientSession(~sess)
     , SubmissionFor(~id, s_fetching_pk)
     , PrePQAttack()
     ]->
-  [ !Submission($NR, ~id, <ct1, '0x0', ct3, ct4>)
+  [ !Submission($NR, ~id, <ct1, ct2, ct3, ct4>)
   , FetchToken(~id)
-  , !APKE_MessageSpace(pt)
+  , !APKE_MessageSpace(pt1)
+  , !PKE_MessageSpace(pt2)
   , !NonPQSecKey(~x) ]
 
 // SECUREDROP INSTANCE
