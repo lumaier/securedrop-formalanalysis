@@ -166,6 +166,7 @@ rule Source_Send[color=#58a820]:
       ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, pt1, $NR)
       pt2 = <'pk', s_fetching_pk, pk(~s_pke_sk), s_apke_pk>
       ct2 = PKE_Enc(j_epke_pk, pt2)
+      j_fetching_pk = 'g'^k
       ct3 = j_fetching_pk^~x
       ct4 = 'g'^~x
   in
@@ -173,9 +174,9 @@ rule Source_Send[color=#58a820]:
   , !Pk_Newsroom($NR, nr_pk)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_pk, j_epke_pk, j_eapke_pk, sig_je_pk>)
   , Fr(~sess), Fr(~x), Fr(~msg), Fr(~id) ]
-  --[ DHCheck(j_fetching_pk)
+  --[
       // check signatures of journalist's longterm signature and ephemeral encryption keys
-    , Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
+      Eq(verify(sig_j_pk, <'long-term', j_sig_pk, j_fetching_pk, j_apke_pk>, nr_pk), true)
     , Eq(verify(sig_je_pk, <'ephemeral', j_epke_pk, j_eapke_pk>, j_sig_pk), true)
       // Actions for Lemmas
     , SourceSubmission(~id, s_fetching_pk, s_apke_pk, j_sig_pk, $NR, ~msg)
@@ -204,13 +205,13 @@ rule Source_Query[color=#58a820]:
   , SourceQueried($S, $NR, ~sess, ~s_fetching_sk) ]
 
 rule Source_ChallengeResponse[color=#58a820]:
-  let challenge_key = kdf(<$NR, challenge_pc^~s_fetching_sk>)
+  let challenge_pc = 'g'^k
+      challenge_key = kdf(<$NR, challenge_pc^~s_fetching_sk>)
   in
   [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
   , Client_In(~sess, $NR, <challenge_pc, senc(id, challenge_key)>) ]
   --[ PrePQAttack()
-    , ClientSession(~sess)
-    , DHCheck(challenge_pc) ]->
+    , ClientSession(~sess) ]->
   [ Client_Out(~sess, $NR, id)
   , SourceResponded($S, $NR, ~sess) ]
 
@@ -246,19 +247,20 @@ rule Journalist_Query[color=#0a0aff]:
   , JournalistQueried($J, $NR, ~sess) ]
 
 rule Journalist_ChallengeResponse[color=#0a0aff]:
-  let challenge_key = kdf(<$NR, challenge_pc^~j_fetching_sk>)
+  let challenge_pc = 'g'^k
+      challenge_key = kdf(<$NR, challenge_pc^~j_fetching_sk>)
   in
   [ JournalistQueried($J, $NR, ~sess)
   , !Ltk_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Client_In(~sess, $NR, <challenge_pc, senc(id, challenge_key)>) ]
   --[ PrePQAttack()
-    , ClientSession(~sess)
-    , DHCheck(challenge_pc) ]->
+    , ClientSession(~sess) ]->
   [ Client_Out(~sess, $NR, id)
   , JournalistResponded($J, $NR, ~sess) ]
 
 rule Journalist_Recv[color=#0a0aff,derivchecks]:
-  let j_eapke_pk = pk(~j_eapke_sk)
+  let s_fetching_pk = 'g'^k
+      j_eapke_pk = pk(~j_eapke_sk)
       pt1 = <'submission', pk(~j_sig_sk), m>
       pt2 = <'pk', s_fetching_pk, s_pke_pk, s_apke_pk>
   in
@@ -273,7 +275,7 @@ rule Journalist_Recv[color=#0a0aff,derivchecks]:
     , Journalist_Received(pk(~j_sig_sk), j_eapke_pk, $NR, s_fetching_pk, s_apke_pk, m)
     , ClientSession(~sess)
     , PrePQAttack()
-    , DHCheck(s_fetching_pk) ]->
+    ]->
   [ Journalist_Recv($J, j_eapke_pk, s_fetching_pk, s_pke_pk, s_apke_pk) ]
 
 // Sending
@@ -307,7 +309,9 @@ rule Journalist_Send[color=#0a0aff]:
 // SECUREDROP INSTANCE
 
 rule ServerChallenge[color=#c24bb8]:
-  let challenge = senc(~chall, kdf(<$NR, ss^~r>))
+  let pk = 'g'^k1
+      ss = 'g'^k2
+      challenge = senc(~chall, kdf(<$NR, ss^~r>))
   in
   [ Server_In(~sess, $NR, 'request')
   , !Submission($NR, ~id, <ct1, ct2, ss, pk>)
@@ -315,9 +319,7 @@ rule ServerChallenge[color=#c24bb8]:
   --[ ServerSource(<pk^~r, challenge>)
     , ClientSource(~chall)
     , FetchStart(~id, $NR, ss^~r, ~chall)
-    , PrePQAttack()
-    , DHCheck(pk)
-    , DHCheck(ss) ]->
+    , PrePQAttack() ]->
   [ Server_Out(~sess, $NR, <pk^~r, challenge>)
   , Challenged($NR, ~sess, ~id, ~chall, ct1, ct2) ]
 
@@ -370,9 +372,6 @@ restriction Eq:
 
 restriction OnlyOnce:
   "All x #i #j. OnlyOnce(x)@#i & OnlyOnce(x)@#j ==> #i = #j"
-
-restriction DHCheck:
-  "All x #t. DHElement(x) @ #t ==> (not x = 'g') & (not x = DH_neutral)"
 
 // not automatically verifiable
 lemma Executability_Source_Submission:
