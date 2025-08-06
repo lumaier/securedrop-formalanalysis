@@ -465,7 +465,7 @@ lemma Journalist_Authentication[reuse]:
         | (Ex #x. Reveal_Source_APKE(s_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
 
-// Auto-provable in 2782.46s (Tamarin server)
+// Auto-provable in 2345.66s (Tamarin server)
 lemma FetchingSharedSecretSecrecySourceSubmission[reuse]:
   "All id nr ss chall j_fetch_pk #t1 #t2 #t3 #t4.
         ( FetchStart(id, nr, ss, chall) @ #t1

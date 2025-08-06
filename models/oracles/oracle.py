@@ -39,68 +39,66 @@ if argv[1] == 'SecureChannelSources':
 elif argv[1] == 'FetchingSharedSecretSecrecySourceSubmission':
   match = matchAgainstList([
     re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    re.compile(r'∃.+Reveal'),
     '!KU( ~r',
     '!KU( ~j',
     '!KU( ~x',
     '!KU( ~ltk',
-    '!Submission',
+    re.compile(r'!Submission\(.+\) ▶. #t1'),
     '!KU( sign(<\'long-term\', pk(x), j_fetch_pk, j_apke_pk>, ~ltk)',
-    '!KU( \'g\'^(~j_fetching_sk*~r*~x) ) @ #t3',
-    'splitEqs(3)',
+    '!KU( \'g\'^(~j_fetching_sk*~r*~x) ) @ #t4',
+    'splitEqs(4)',
   ], lines)
 elif argv[1] == 'FetchingSharedSecretSecrecyJournalistSubmission':
   match = matchAgainstList([
-    '(∃ id #x.   (SourceSubmission',
+    re.compile(r'∃.+Reveal'),
+    '!Ltk_Source',
+    'splitEqs(9)',
+    'splitEqs(8)',
     '!KU( ~r',
     '!KU( ~s_',
     '!KU( ~x',
     'splitEqs(13)',
-    '!Submission',
-    '!KU( \'g\'^(~r*~s_fetching_sk*~x) ) @ #t4',
+    re.compile(r'!Submission\(.+\) ▶. #t1'),
+    '!KU( \'g\'^(~r*~s_fetching_sk*~x) ) @ #t5',
   ], lines)
 elif argv[1] == 'FetchingChallengeSecrecy':
-  lines.reverse()
   match = matchAgainstList([
+    '∃',
     'senc(~chall,',
     re.compile(r'Client_Out\(.+~chall'),
-
-    # 'Honest( \'g\' )',
-    # re.compile(r'!Submission\(.+\'g\','),
-    # re.compile(r'!Submission\(.+\'g\'>'),
-
-    # re.compile(r'KU\( ~(r|x|(j|s)_fetching_sk)\.?\d* \)'),
-    # re.compile(r'\'g\'\^\(~[\w\d_\.]+\*~[\w\d_\.]+\*~[\w\d_\.]+\)'),
-    # re.compile(r'!Submission\(.+\) ▶₁ #t'),
-    # '!KU( ~chall )',
-    # re.compile(r'!Submission\(.*senc\(~chall\.?\d*, kdf\(<\$Server\.?\d*,.*\)'),
-    # '!KU( senc(~chall',
-    # 'splitEqs(10)',
-    # 'Honest',
+    re.compile(r'!Submission.+ ▶. #t1'),
+    '!KU( ~chall',
   ], lines)
 elif argv[1] == 'SourceSubmission_Secrecy':
   match = matchAgainstList([
-    re.compile(r'!Submission\(.+\'g\','),
-    re.compile(r'!Submission\(.+\'g\'>'),
-    '!KU( ~chall )',
-    'splitEqs(4)',
-    '!KU( ~j_fetching',
-    '!KU( ~j_eapke_sk',
-    '!KU( ~j_epke_sk',
-    '!KU( ~j_sig_sk',
-    '!KU( ~r',
-    '!KU( ~x',
-    '!KU( ~ltk',
-    '!KU( senc(~chall, kdf(<$Server',
-    '!Submission',
-    '!KU( \'g\'^(~j_fetching_sk*~r*~x) )',
-    re.compile(r'!KU\( \'g\'\^\(~x\.\d\*~x\.\d\) \)'),
-    re.compile(r'Client_Out\(.+~chall'),
+    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    'Reveal_Newsroom_Key',
+    'Reveal_Journalist_SIG',
     '!Ltk',
     '!Pk',
     '!KU( sign(<\'ephemeral\'',
     '!KU( sign(<\'long-term\'',
+    '!Submission',
     '!KU( ~msg',
-    '!KU( ~sess.1',
+    '∀',
+    re.compile(r'Client_Out\(.+~chall'),
+    '∃',
+
+    # '!KU( ~chall )',
+    # 'splitEqs(4)',
+    # '!KU( ~j_fetching',
+    # '!KU( ~j_eapke_sk',
+    # '!KU( ~j_epke_sk',
+    # '!KU( ~j_sig_sk',
+    # '!KU( ~r',
+    # '!KU( ~x',
+    # '!KU( ~ltk',
+    # '!KU( senc(~chall, kdf(<$Server',
+    # '!KU( \'g\'^(~j_fetching_sk*~r*~x) )',
+    # re.compile(r'!KU\( \'g\'\^\(~x\.\d\*~x\.\d\) \)'),
+
+    # '!KU( ~sess.1',
 
     # 'splitEqs',
     # re.compile(r'!KU\( senc.+\) @ #vk\.21'),
@@ -116,6 +114,11 @@ elif argv[1] == 'SessionSecrecy':
   match = matchAgainstList([
     re.compile(r'(Source|Journalist)(Queried|Responded)'),
     '!KU( ~sess )',
+  ], lines)
+elif argv[1] == 'EphemeralDHSecrecy':
+  match = matchAgainstList([
+    'ClassicSecret',
+    '!KU( ~x',
   ], lines)
 
 if match is not None:
