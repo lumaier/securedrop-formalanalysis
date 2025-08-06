@@ -58,6 +58,7 @@ rule Register_Source_Passphrase[color=#ffee00]:
     , IsSourcePKEKey(~s_pke_sk)
     , IsSourceAPKEKey(~s_apke_sk)
     , Source(pk(~s_apke_sk))
+    , SourceFetchPk(s_fetching_pk)
     , PrePQAttack() ]->
   [ !Ltk_Source($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !NonPQSecKey(~s_fetching_sk)
@@ -464,34 +465,38 @@ lemma Journalist_Authentication[reuse]:
         | (Ex #x. Reveal_Source_APKE(s_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
 
+// Auto-provable in 2782.46s (Tamarin server)
 lemma FetchingSharedSecretSecrecySourceSubmission[reuse]:
-  "All id nr ss chall j_fetch_pk #t1 #t2 #t3.
+  "All id nr ss chall j_fetch_pk #t1 #t2 #t3 #t4.
         ( FetchStart(id, nr, ss, chall) @ #t1
-        & SourceSubmissionFor(id, j_fetch_pk) @ #t2
-        & !KU(ss) @ #t3)
-    ==>   (Ex #x. Reveal_Journalist_Fetching(j_fetch_pk) @ #x)
-        | (Ex #x. Reveal_Newsroom_Key(nr) @ #x)
-        | (Ex #x. PQAttack() @ #x)"
+        & Fetched(id) @ #t2
+        & SourceSubmissionFor(id, j_fetch_pk) @ #t3
+        & !KU(ss) @ #t4
+        & #t4 < #t2)
+    ==>   (Ex #x. Reveal_Journalist_Fetching(j_fetch_pk) @ #x & #x < #t2)
+        | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t3)"
 
 lemma FetchingSharedSecretSecrecyJournalistSubmission[reuse]:
-  "All id nr ss chall j_eapke_pk s_pk s_fetch_pk #t1 #t2 #t3 #t4.
+  "All id nr ss chall j_eapke_pk s_pk s_fetch_pk #t1 #t2 #t3 #t4 #t5.
         ( FetchStart(id, nr, ss, chall) @ #t1
-        & JournalistSubmissionFor(id, j_eapke_pk, s_pk, s_fetch_pk) @ #t2
-        & Source(s_pk) @ #t3
-        & !KU(ss) @ #t4)
-    ==>   (Ex #x. Reveal_Source_Fetching(s_fetch_pk) @ #x)
-        | (Ex #x. Reveal_Journalist_EAPKE(j_eapke_pk) @ #x)
-        | (Ex #x. Reveal_Source_APKE(s_pk) @ #x & #x < #t1)
-        | (Ex #x. PQAttack() @ #x)"
+        & Fetched(id) @ #t2
+        // TODO: Potential to reduce no. of arguments
+        & JournalistSubmissionFor(id, j_eapke_pk, s_pk, s_fetch_pk) @ #t3
+        & SourceFetchPk(s_fetch_pk) @ #t4
+        & !KU(ss) @ #t5
+        & #t5 < #t2)
+    ==>   (Ex #x. Reveal_Source_Fetching(s_fetch_pk) @ #x & #x < #t2)"
 
+// Auto-provable
 lemma FetchingChallengeSecrecy[reuse]:
-  "All id nr ss chall #t1.
+  "All id nr ss chall #t1 #t2.
           FetchStart(id, nr, ss, chall) @ #t1
+        & Fetched(id) @ #t2
         & ( (Ex j_fetch_pk #t2. SourceSubmissionFor(id, j_fetch_pk) @ #t2)
           | (Ex j_eapke_pk s_pk s_fetch_pk #t2 #t3. JournalistSubmissionFor(id, j_eapke_pk, s_pk, s_fetch_pk) @ #t2
               & Source(s_pk) @ #t3))
     ==>   (not Ex #x. !KU(chall) @ #x)
-        | (Ex #x. !KU(ss) @ #x)
+        | (Ex #x. !KU(ss) @ #x & #x < #t2)
         | (Ex #x. SecureDropInstanceCompromise(nr) @ #x)
         | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)"
 
