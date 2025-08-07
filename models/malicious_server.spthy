@@ -214,9 +214,9 @@ lemma JournalistEAPKEKeySecrecy[reuse]:
 rule Source_Send[color=#58a820]:
   let s_fetching_pk = 'g'^~s_fetching_sk
       s_apke_pk = pk(~s_apke_sk)
-      pt1 = <'submission', j_sig_pk, ~msg>
+      pt1 = <'submission', j_sig_pk, s_fetching_pk, pk(~s_pke_sk), ~msg>
       ct1 = APKE_Enc(~s_apke_sk, j_eapke_pk, pt1, $NR)
-      pt2 = <'pk', s_fetching_pk, pk(~s_pke_sk), s_apke_pk>
+      pt2 = <'pk', s_apke_pk>
       ct2 = PKE_Enc(j_epke_pk, pt2)
       j_fetching_pk = 'g'^k
       ct3 = j_fetching_pk^~x
@@ -314,8 +314,8 @@ rule Journalist_ChallengeResponse[color=#0a0aff]:
 rule Journalist_Recv[color=#0a0aff,derivchecks]:
   let s_fetching_pk = 'g'^k
       j_eapke_pk = pk(~j_eapke_sk)
-      pt1 = <'submission', pk(~j_sig_sk), m>
-      pt2 = <'pk', s_fetching_pk, s_pke_pk, s_apke_pk>
+      pt1 = <'submission', pk(~j_sig_sk), s_fetching_pk, s_pke_pk, m>
+      pt2 = <'pk', s_apke_pk>
   in
   [ JournalistResponded($J, $NR, ~sess)
   , !Ltk_Journalist_SIG_Key($J, ~j_sig_sk)
