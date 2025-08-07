@@ -84,26 +84,18 @@ elif argv[1] == 'SourceSubmission_Secrecy':
     '∀',
     re.compile(r'Client_Out\(.+~chall'),
     '∃',
-
-    # '!KU( ~chall )',
-    # 'splitEqs(4)',
-    # '!KU( ~j_fetching',
-    # '!KU( ~j_eapke_sk',
-    # '!KU( ~j_epke_sk',
-    # '!KU( ~j_sig_sk',
-    # '!KU( ~r',
-    # '!KU( ~x',
-    # '!KU( ~ltk',
-    # '!KU( senc(~chall, kdf(<$Server',
-    # '!KU( \'g\'^(~j_fetching_sk*~r*~x) )',
-    # re.compile(r'!KU\( \'g\'\^\(~x\.\d\*~x\.\d\) \)'),
-
-    # '!KU( ~sess.1',
-
-    # 'splitEqs',
-    # re.compile(r'!KU\( senc.+\) @ #vk\.21'),
-    # re.compile(r'!KU\( senc.+\) @ #vk\.\d+'),
-    # re.compile(r'Client_In\(.+\) ▶. #vr\.23'),
+  ], lines)
+elif argv[1] == 'JournalistSubmission_Secrecy':
+  match = matchAgainstList([
+    '!JournalistEnrolled',
+    '!!Ltk_Journalist_APKE_Key',
+    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    # '!Submission',
+    '!KU( ~msg',
+    'Fetched( ~id ) @ #x',
+    re.compile(r'Client_Out\(.+~chall'),
+    '∀',
+    '∃',
   ], lines)
 elif argv[1] == 'Source_Authentication' or argv[1] == 'Journalist_Authentication':
   match = matchAgainstList([

@@ -351,7 +351,7 @@ rule Journalist_Send[color=#0a0aff]:
   --[ SubmissionSource(<ct1, ct2, ct3, ct4>)
     , ServerSource(<ct1, ct2>)
       // Actions for Lemmas
-    , Journalist_Sent(pk(~j_apke_sk), $NR, s_apke_pk, ~msg)
+    , JournalistSubmission(~id, pk(~j_apke_sk), $NR, s_fetching_pk, s_apke_pk, ~msg)
     , ClientSession(~sess)
     , JournalistSubmissionFor(~id, j_eapke_pk, s_apke_pk, s_fetching_pk)
     , ClassicSecret(~x)
@@ -446,8 +446,8 @@ exists-trace
 
 lemma Executability_Journalist_Response:
 exists-trace
-"Ex #t1 #t2 s_apke_pk j_apke_pk nr m.
-        Journalist_Sent(j_apke_pk, nr, s_apke_pk, m) @ #t1
+"Ex #t1 #t2 id s_fetch_pk s_apke_pk j_apke_pk nr m.
+        JournalistSubmission(id, j_apke_pk, nr, s_fetch_pk, s_apke_pk, m) @ #t1
       & Source_Received(s_apke_pk, j_apke_pk, nr, m) @ #t2
       & (not Ex #x. AdversaryActivity() @ #x)"
 
@@ -468,7 +468,7 @@ lemma Source_Authentication[reuse]:
 lemma Journalist_Authentication[reuse]:
   "All j_pk nr s_pk m #t.
         Source_Received(s_pk, j_pk, nr, m) @ #t
-    ==>   (Ex #x. Journalist_Sent(j_pk, nr, s_pk, m) @ #x & #x < #t)
+    ==>   (Ex id s_fetch_pk #x. JournalistSubmission(id, j_pk, nr, s_fetch_pk, s_pk, m) @ #x & #x < #t)
         | (Ex #x. Reveal_Journalist_APKE(j_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Source_APKE(s_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
@@ -523,6 +523,17 @@ lemma SourceSubmission_Secrecy:
             | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)
             | (Ex #x. SecureDropInstanceCompromise(nr) @ #x))
           & (Ex #x. Reveal_Journalist_EAPKE(j_eapke_pk) @ #x))"
+
+lemma JournalistSubmission_Secrecy:
+  "All id j_pk nr s_fetching_pk s_apke_pk m #t1 #t2.
+        ( JournalistSubmission(id, j_pk, nr, s_fetching_pk, s_apke_pk, m) @ #t1
+        & Source(s_apke_pk) @ #t2)
+    ==>   (not Ex #x. K(m) @ #x)
+        | ( ( (Ex #x #y. Fetched(id) @ #x
+                & Reveal_Source_Fetching(s_fetching_pk) @ #y & #y < #x)
+            | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)
+            | (Ex #x. SecureDropInstanceCompromise(nr) @ #x))
+          & (Ex #x. Reveal_Source_APKE(s_apke_pk) @ #x))"
 
 // lemma Auto_Secrecy_Source_Message:
 // "All #t s_dh_pk j_sig_pk j_edh_pk j_ekem_pk nr m.
