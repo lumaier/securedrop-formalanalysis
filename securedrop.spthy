@@ -3,7 +3,7 @@ begin
 
 builtins: symmetric-encryption, diffie-hellman, signing
 
-heuristic: o "./oracles/oracle.py"
+heuristic: o "./oracle.py"
 
 functions: kdf/1, bot/0
 #include "parts/apke.spthy"
