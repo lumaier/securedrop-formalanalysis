@@ -15,9 +15,9 @@ rule InsiderAttack:
   , !APKE_MessageSpace(pt) ]
 
 restriction APKE_Consistency:
-  "All ct pkS skR pt1 pt2 #t1 #t2.
-          APKE_Dec(ct, pkS, skR, pt1) @ #t1
-        & APKE_Dec(ct, pkS, skR, pt2) @ #t2
+  "All ct pkS skR ad pt1 pt2 #t1 #t2.
+          APKE_Dec(ct, pkS, skR, ad, pt1) @ #t1
+        & APKE_Dec(ct, pkS, skR, ad, pt2) @ #t2
     ==> pt1 = pt2"
 
 restriction APKE_Correctness:
