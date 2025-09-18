@@ -312,7 +312,7 @@ rule Journalist_ChallengeResponse[color=#0a0aff]:
   [ Client_Out(~sess, $NR, id)
   , JournalistResponded($J, $NR, ~sess) ]
 
-rule Journalist_Recv[color=#0a0aff,derivchecks]:
+rule Journalist_Recv[color=#0a0aff,no_derivcheck]:
   let s_fetching_pk = 'g'^k
       j_eapke_pk = pk(~j_eapke_sk)
       pt1 = <'submission', pk(~j_sig_sk), s_fetching_pk, s_pke_pk, m>
