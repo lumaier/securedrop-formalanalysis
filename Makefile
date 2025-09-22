@@ -2,10 +2,14 @@ TAMARIN_RELEASE=tamarin-prover
 N_THREADS=10
 PORT=3001
 
-# run models on the tamarin-server with:
-interactive:
-	@$(TAMARIN_RELEASE) +RTS -N$(N_THREADS) -RTS interactive "." --port=$(PORT)
+well-formed:
+	@$(TAMARIN_RELEASE) --quit-on-warning --derivcheck-timeout=-1 "securedrop.spthy"
 
-# run models on local machine with:
-prove-all-traces:
-	@$(TAMARIN_RELEASE) +RTS -N$(N_THREADS) -RTS --prove="Auto_*" "securedrop.spthy"
+interactive:
+	@$(TAMARIN_RELEASE) +RTS -N$(N_THREADS) -RTS interactive --derivcheck-timeout=0 --port=$(PORT) "./"
+
+prove-auto:
+	@$(TAMARIN_RELEASE) +RTS -N$(N_THREADS) -RTS --derivcheck-timeout=0 --prove="Auto_*" "securedrop.spthy"
+
+prove-easy:
+	@$(TAMARIN_RELEASE) +RTS -N$(N_THREADS) -RTS --derivcheck-timeout=0 --prove="Easy_*" "securedrop.spthy"
