@@ -26,9 +26,11 @@ def matchAgainstList(priorityList, lines):
       pass
 
 re_keys = re.compile(r'^!?[\w_]+_Key\(')
+re_signed_keys = re.compile(r'!KU\( sign\(<\'[\w-]+\'')
+re_illegal_submission = re.compile(r'!Submission\(.+\'g\'(,|>)')
 
 match = None
-if argv[1] == 'Easy_SecureChannelSources':
+if argv[1] == 'Auto_SecureChannelSources':
   match = matchAgainstList([
     '~~>',
     re.compile(r'^\(∃'),
@@ -40,7 +42,7 @@ if argv[1] == 'Easy_SecureChannelSources':
   ], lines)
 elif argv[1] == 'Auto_FetchingSharedSecretSecrecySourceSubmission':
   match = matchAgainstList([
-    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    re_illegal_submission,
     re.compile(r'∃.+Reveal'),
     '!KU( ~r',
     '!KU( ~j',
@@ -53,7 +55,7 @@ elif argv[1] == 'Auto_FetchingSharedSecretSecrecySourceSubmission':
   ], lines)
 elif argv[1] == 'Auto_FetchingSharedSecretSecrecyJournalistSubmission':
   match = matchAgainstList([
-    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    re_illegal_submission,
     re.compile(r'∃.+Reveal'),
     '!KU( \'g\'^(~r*~s_fetching_sk*~x) ) @ #t5',
     'splitEqs(4)',
@@ -68,7 +70,7 @@ elif argv[1] == 'Auto_FetchingChallengeSecrecy':
   ], lines)
 elif argv[1] == 'Auto_SourceSubmission_Secrecy':
   match = matchAgainstList([
-    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    re_illegal_submission,
     'Reveal_Newsroom_Key',
     'Reveal_Journalist_SIG_Key',
     '!LongTerm',
@@ -81,11 +83,11 @@ elif argv[1] == 'Auto_SourceSubmission_Secrecy':
     re.compile(r'Client_Out\(.+~chall'),
     '∃',
   ], lines)
-elif argv[1] == 'Auto_JournalistSubmission_Secrecy':
+elif argv[1] == 'JournalistSubmission_Secrecy':
   match = matchAgainstList([
     '!JournalistEnrolled',
     '!LongTerm_Journalist_APKE_Key',
-    re.compile(r'!Submission\(.+\'g\'(,|>)'),
+    re_illegal_submission,
     '!KU( ~msg )',
     'Fetched( ~id ) @ #x',
     re.compile(r'Client_Out\(.+~chall \)'),
@@ -94,10 +96,14 @@ elif argv[1] == 'Auto_JournalistSubmission_Secrecy':
     re.compile(r'^\(*∃'),
     re.compile(r'^\(*∀'),
   ], lines)
-elif argv[1] == 'Auto_Source_Authentication' or argv[1] == 'Auto_Journalist_Authentication':
+elif argv[1] == 'Agreement_Source' or argv[1] == 'Agreement_Journalist':
   match = matchAgainstList([
-    re.compile(r'!Submission\(.+\'g\','),
-    re.compile(r'!Submission\(.+\'g\'>'),
+    re_illegal_submission,
+    re.compile(r'∃.+Reveal'),
+    re_keys,
+    'APKE_Enc',
+    re_signed_keys,
+    re.compile(r'(Source|Journalist)Responded'),
   ], lines)
 elif argv[1] == 'Easy_SessionSecrecy':
   match = matchAgainstList([
