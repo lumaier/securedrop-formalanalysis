@@ -14,7 +14,7 @@ restriction PKE_Consistency:
     ==> pt1 = pt2"
 
 restriction PKE_Correctness:
-  "All ct skR mDec #t1 #t2.
+  "All pt skR mDec #t1 #t2.
           PKE_Dec(PKE_Enc(pk(skR), pt), skR, mDec) @ #t1
         & Honest(pk(skR)) @ #t2
     ==> mDec = pt"

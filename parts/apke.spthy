@@ -15,7 +15,7 @@ restriction APKE_Consistency:
     ==> pt1 = pt2"
 
 restriction APKE_Correctness:
-  "All ct skAuth skDec ad mDec #t1 #t2 #t3.
+  "All pt skAuth skDec ad mDec #t1 #t2 #t3.
           APKE_Dec(APKE_Enc(skAuth, pk(skDec), pt, ad), pk(skAuth), skDec, ad, mDec) @ #t1
         & Honest(pk(skAuth)) @ #t2
         & Honest(pk(skDec)) @ #t3
