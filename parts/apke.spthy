@@ -33,4 +33,4 @@ restriction APKE_OutsiderAuth2:
         & Honest(pk(skAuth)) @ #t2
         & Honest(pk(skDec)) @ #t3
         & not (mDec = bot)
-    ==> ct = APKE_Enc(skAuth, pk(skDec), mDec, info, ad)"
+    ==> ct = APKE_Enc(skAuth, pk(skDec), mDec, ad, info)"
