@@ -119,13 +119,13 @@ rule Journalist_Enrollment[color=#ffee00]:
     , Honest(j_sig_pk)
     , Honest(j_apke_pk)
     , IsJournalistFetchingKey(~j_fetching_sk, j_fetching_pk)
-    , IsJournalistSIGKey(~j_sig_sk)
+    , IsJournalistSIGKey($NR, ~j_sig_sk)
     , IsJournalistAPKEKey(~j_apke_sk)
     , OnlyOnce($J)
     , PrePQAttack() ]->
   [ Out(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_sig_pk, sig_j_ltk>)
   , !Journalist_Enrolled($NR, $J)
-  , !LongTerm_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !LongTerm_Journalist_SIG_Key($NR, $J, ~j_sig_sk)
   , !LongTerm_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , !LongTerm_Journalist_APKE_Key($J, ~j_apke_sk)
   , !NonPQSecKey(~j_sig_sk)
@@ -134,8 +134,8 @@ rule Journalist_Enrollment[color=#ffee00]:
 rule Reveal_Journalist_SIG_Key[color=#ff6961]:
   let j_sig_pk = pk(~j_sig_sk)
   in
-  [ !LongTerm_Journalist_SIG_Key($A, ~j_sig_sk) ]
-  --[ Reveal_Journalist_SIG_Key(j_sig_pk)
+  [ !LongTerm_Journalist_SIG_Key($NR, $A, ~j_sig_sk) ]
+  --[ Reveal_Journalist_SIG_Key($NR, j_sig_pk)
     , AdversaryActivity() ]->
   [ Out(~j_sig_sk) ]
 
@@ -159,8 +159,8 @@ lemma Easy_JournalistFetchingKeySecrecy[reuse]:
         | (Ex #x. PQAttack() @ #x & #x < #t2)"
 
 lemma Easy_JournalistSIGKeySecrecy[reuse]:
-  "All k #t1 #t2. IsJournalistSIGKey(k) @ #t1 & !KU(k) @ #t2
-    ==>   (Ex #x. Reveal_Journalist_SIG_Key(pk(k)) @ #x & #x < #t2)
+  "All nr k #t1 #t2. IsJournalistSIGKey(nr, k) @ #t1 & !KU(k) @ #t2
+    ==>   (Ex #x. Reveal_Journalist_SIG_Key(nr, pk(k)) @ #x & #x < #t2)
         | (Ex #x. PQAttack() @ #x & #x < #t2)"
 
 lemma Easy_JournalistAPKEKeySecrecy[reuse]:
@@ -172,7 +172,7 @@ rule Journalist_Register_Ephemeral_Key[color=#ffee00]:
       j_eapke_pk = pk(~j_eapke_sk)
       sig_j_eph = sign(<'j-sig-eph', j_epke_pk, j_eapke_pk>, ~j_sig_sk)
   in
-  [ !LongTerm_Journalist_SIG_Key($J, ~j_sig_sk)
+  [ !LongTerm_Journalist_SIG_Key($NR, $J, ~j_sig_sk)
   , Fr(~j_epke_sk)
   , Fr(~j_eapke_sk) ]
   --[ Honest(j_epke_pk)
@@ -234,7 +234,7 @@ rule Source_Send[color=#58a820,no_derivcheck]:
     , Eq(verify(sig_j_ltk, <'j-sig-ltk', j_fetching_pk, j_apke_pk>, j_sig_pk), true)
     , Eq(verify(sig_j_eph, <'j-sig-eph', j_epke_pk, j_eapke_pk>, j_sig_pk), true)
       // Actions for Lemmas
-    , SourceSubmission(~id, s_fetching_pk, s_apke_pk, j_sig_pk, j_eapke_pk, j_fetching_pk, $NR, ~msg)
+    , SourceSubmission(~id, s_fetching_pk, s_apke_pk, j_eapke_pk, j_fetching_pk, $NR, ~msg)
     , SubmissionSource(cts)
     , ServerSource(<ct1, ct2>)
     , ClientSession(~sess)
@@ -286,7 +286,7 @@ rule Source_Recv[color=#58a820]:
     , Eq(verify(sig_j_sig_pk, <'nr-sig', j_sig_pk>, nr_pk), true)
     , Eq(verify(sig_j_ltk, <'j-sig-ltk', j_fetching_pk, j_apke_pk>, j_sig_pk), true)
       // Actions for Lemmas
-    , Source_Received(pk(~s_apke_sk), 'g'^~s_fetching_sk, j_sig_pk, j_apke_pk, $NR, m)
+    , Source_Received(pk(~s_apke_sk), 'g'^~s_fetching_sk, j_apke_pk, $NR, m)
     , PrePQAttack()
     , ClientSession(~sess)
     ]->
@@ -322,7 +322,7 @@ rule Journalist_Recv[color=#0a0aff,no_derivcheck]:
       pt2 = <'pk', s_apke_pk>
   in
   [ JournalistResponded($J, $NR, ~sess)
-  , !LongTerm_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !LongTerm_Journalist_SIG_Key($NR, $J, ~j_sig_sk)
   , !LongTerm_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Journalist_Ephemeral_Key($J, ~j_epke_sk, ~j_eapke_sk)
   , Client_In(~sess, $NR, <ct1, ct2>)
@@ -330,7 +330,7 @@ rule Journalist_Recv[color=#0a0aff,no_derivcheck]:
   --[ APKE_Dec(ct1, s_apke_pk, ~j_eapke_sk, $NR, 'g'^~j_fetching_sk, pt1)
     , PKE_Dec(ct2, ~j_epke_sk, pt2)
     // Actions for Lemmas
-    , Journalist_Received(pk(~j_sig_sk), j_eapke_pk, 'g'^~j_fetching_sk, $NR, s_fetching_pk, s_apke_pk, m)
+    , Journalist_Received(j_eapke_pk, 'g'^~j_fetching_sk, $NR, s_fetching_pk, s_apke_pk, m)
     , ClientSession(~sess)
     , PrePQAttack()
     ]->
@@ -351,13 +351,13 @@ rule Journalist_Send[color=#0a0aff]:
   [ Journalist_Recv($J, j_eapke_pk, s_fetching_pk, s_pke_pk, s_apke_pk)
   , !Journalist_Enrolled($NR, $J)
   , !LongTerm_Journalist_APKE_Key($J, ~j_apke_sk)
-  , !LongTerm_Journalist_SIG_Key($J, ~j_sig_sk)
+  , !LongTerm_Journalist_SIG_Key($NR, $J, ~j_sig_sk)
   , !LongTerm_Journalist_FETCHING_Key($J, ~j_fetching_sk)
   , Fr(~sess), Fr(~msg), Fr(~x), Fr(~id) ]
   --[ SubmissionSource(<ct1, ct2, ct3, ct4>)
     , ServerSource(<ct1, ct2>)
       // Actions for Lemmas
-    , JournalistSubmission(~id, j_sig_pk, j_apke_pk, j_eapke_pk, $NR, s_apke_pk, s_fetching_pk, ~msg)
+    , JournalistSubmission(~id, j_apke_pk, j_eapke_pk, $NR, s_apke_pk, s_fetching_pk, ~msg)
     , ClientSession(~sess)
     , JournalistSubmissionFor(~id, s_fetching_pk)
     , ClassicSecret(~x)
@@ -451,16 +451,16 @@ restriction OnlyOnce:
 
 lemma Executability_Source_Submission:
 exists-trace
-"Ex #t1 #t2 id s_fetching_pk s_apke_pk j_sig_pk j_eapke_pk j_fetching_pk nr m.
-        SourceSubmission(id, s_fetching_pk, s_apke_pk, j_sig_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #t1
-      & Journalist_Received(j_sig_pk, j_eapke_pk, j_fetching_pk, nr, s_fetching_pk, s_apke_pk, m) @ #t2
+"Ex #t1 #t2 id s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
+        SourceSubmission(id, s_fetching_pk, s_apke_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #t1
+      & Journalist_Received(j_eapke_pk, j_fetching_pk, nr, s_fetching_pk, s_apke_pk, m) @ #t2
       & (not Ex #x. AdversaryActivity() @ #x)"
 
 lemma Executability_Journalist_Response:
 exists-trace
-"Ex #t1 #t2 id s_fetch_pk s_apke_pk j_sig_pk j_apke_pk j_eapke_pk nr m.
-        JournalistSubmission(id, j_sig_pk, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetch_pk, m) @ #t1
-      & Source_Received(s_apke_pk, s_fetch_pk, j_sig_pk, j_apke_pk, nr, m) @ #t2
+"Ex #t1 #t2 id s_fetch_pk s_apke_pk j_apke_pk j_eapke_pk nr m.
+        JournalistSubmission(id, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetch_pk, m) @ #t1
+      & Source_Received(s_apke_pk, s_fetch_pk, j_apke_pk, nr, m) @ #t2
       & (not Ex #x. AdversaryActivity() @ #x)"
 
 lemma Easy_SessionSecrecy[reuse]:
@@ -470,17 +470,17 @@ lemma Easy_EphemeralDHSecrecy[reuse]:
   "All x #t1 #t2. ClassicSecret(x) @ #t1 & !KU(x) @ #t2 ==> (Ex #x. PQAttack() @ #x & #x < #t2)"
 
 lemma Agreement_Source[reuse]:
-  "All j_sig_pk j_eapke_pk j_fetching_pk nr s_fetch_pk s_apke_pk m #t.
-        Journalist_Received(j_sig_pk, j_eapke_pk, j_fetching_pk, nr, s_fetch_pk, s_apke_pk, m) @ #t
-    ==>   (Ex id #x. SourceSubmission(id, s_fetch_pk, s_apke_pk, j_sig_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #x & #x < #t)
+  "All j_eapke_pk j_fetching_pk nr s_fetch_pk s_apke_pk m #t.
+        Journalist_Received(j_eapke_pk, j_fetching_pk, nr, s_fetch_pk, s_apke_pk, m) @ #t
+    ==>   (Ex id #x. SourceSubmission(id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #x & #x < #t)
         | (not Ex #x. Source(s_apke_pk) @ #x)
         | (Ex #x. Reveal_Journalist_EAPKE(j_eapke_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Source_APKE(s_apke_pk) @ #x & #x < #t)"
 
 lemma Agreement_Journalist[reuse]:
-  "All j_sig_pk j_apke_pk nr s_apke_pk s_fetch_pk m #t.
-        Source_Received(s_apke_pk, s_fetch_pk, j_sig_pk, j_apke_pk, nr, m) @ #t
-    ==>   (Ex id j_eapke_pk #x. JournalistSubmission(id, j_sig_pk, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetch_pk, m) @ #x & #x < #t)
+  "All j_apke_pk nr s_apke_pk s_fetch_pk m #t.
+        Source_Received(s_apke_pk, s_fetch_pk, j_apke_pk, nr, m) @ #t
+    ==>   (Ex id j_eapke_pk #x. JournalistSubmission(id, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetch_pk, m) @ #x & #x < #t)
         | (Ex #x. Reveal_Journalist_APKE(j_apke_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Source_APKE(s_apke_pk) @ #x & #x < #t)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)"
@@ -523,11 +523,11 @@ lemma Auto_FetchingChallengeSecrecy[reuse]:
         | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)"
 
 lemma Auto_SourceSubmission_Secrecy:
-  "All id s_fetch_pk s_apke_pk j_eapke_pk nr m j_sig_pk j_fetching_pk #t.
-        SourceSubmission(id, s_fetch_pk, s_apke_pk, j_sig_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #t
+  "All id s_fetch_pk s_apke_pk j_eapke_pk nr m j_fetching_pk #t.
+        SourceSubmission(id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #t
     ==>   (not Ex #x. K(m) @ #x)
         | (Ex #x. Reveal_Newsroom_Key(nr) @ #x & #x < #t)
-        | (Ex #x. Reveal_Journalist_SIG_Key(j_sig_pk) @ #x & #x < #t)
+        | (Ex j_sig_pk #x. Reveal_Journalist_SIG_Key(nr, j_sig_pk) @ #x & #x < #t)
         | ( ( (Ex #x #y. Fetched(id) @ #x
                 & Reveal_Journalist_Fetching(j_fetching_pk) @ #y & #y < #x)
             | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)
@@ -535,8 +535,8 @@ lemma Auto_SourceSubmission_Secrecy:
           & (Ex #x. Reveal_Journalist_EAPKE(j_eapke_pk) @ #x))"
 
 lemma JournalistSubmission_Secrecy:
-  "All id j_sig_pk j_apke_pk j_eapke_pk nr s_fetching_pk s_apke_pk m #t.
-        JournalistSubmission(id, j_sig_pk, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetching_pk, m) @ #t
+  "All id j_apke_pk j_eapke_pk nr s_fetching_pk s_apke_pk m #t.
+        JournalistSubmission(id, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetching_pk, m) @ #t
     ==>   (not Ex #x. K(m) @ #x)
         | (not Ex #x. Source(s_apke_pk) @ #x)
         | ( ( (Ex #x #y. Fetched(id) @ #x
