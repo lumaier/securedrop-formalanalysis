@@ -1,2 +1,4 @@
 *.aes
 /server-scripts
+/.vscode
+/debug
