@@ -513,16 +513,15 @@ lemma Auto_FetchingSharedSecretSecrecyJournalistSubmission[reuse]:
     ==>   (Ex #x. Reveal_Source_Fetching(s_fetch_pk) @ #x & #x < #t2)"
 
 lemma Auto_FetchingChallengeSecrecy[reuse]:
-  "All id nr ss chall #t1 #t2.
+  "All id nr ss chall #t1 #t2 #t4.
           FetchStart(id, nr, ss, chall) @ #t1
         & Fetched(id) @ #t2
+        & !KU(chall) @ #t4 & #t4 < #t2
         & ( (Ex j_fetch_pk #t2. SourceSubmissionFor(id, j_fetch_pk) @ #t2)
           | (Ex s_fetch_pk #t2 #t3. JournalistSubmissionFor(id, s_fetch_pk) @ #t2
               & SourceFetchPk(s_fetch_pk) @ #t3))
-    ==>   (not Ex #x. !KU(chall) @ #x)
-        | (Ex #x. !KU(ss) @ #x & #x < #t2)
-        | (Ex #x. SecureDropInstanceCompromise(nr) @ #x)
-        | (Ex #x. SecureDropInstanceReadAccess(nr) @ #x)"
+    ==>   (Ex #x. !KU(ss) @ #x & #x < #t4)
+        | (Ex #x. SecureDropInstanceCompromise(nr) @ #x)"
 
 lemma Auto_SourceSubmission_Secrecy:
   "All id s_fetch_pk s_apke_pk j_eapke_pk nr m j_fetching_pk #t.
