@@ -451,16 +451,14 @@ restriction OnlyOnce:
 
 lemma Executability_Source_Submission:
 exists-trace
-"Ex #t1 #t2 id s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
-        SourceSubmission(id, s_fetching_pk, s_apke_pk, j_eapke_pk, j_fetching_pk, nr, m) @ #t1
-      & Journalist_Received(j_eapke_pk, j_fetching_pk, nr, s_fetching_pk, s_apke_pk, m) @ #t2
+  "Ex #t s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
+        Journalist_Received(j_eapke_pk, j_fetching_pk, nr, s_fetching_pk, s_apke_pk, m) @ #t
       & (not Ex #x. AdversaryActivity() @ #x)"
 
 lemma Executability_Journalist_Response:
 exists-trace
-"Ex #t1 #t2 id s_fetch_pk s_apke_pk j_apke_pk j_eapke_pk nr m.
-        JournalistSubmission(id, j_apke_pk, j_eapke_pk, nr, s_apke_pk, s_fetch_pk, m) @ #t1
-      & Source_Received(s_apke_pk, s_fetch_pk, j_apke_pk, nr, m) @ #t2
+  "Ex #t s_fetch_pk s_apke_pk j_apke_pk nr m.
+        Source_Received(s_apke_pk, s_fetch_pk, j_apke_pk, nr, m) @ #t
       & (not Ex #x. AdversaryActivity() @ #x)"
 
 lemma Easy_SessionSecrecy[reuse]:
