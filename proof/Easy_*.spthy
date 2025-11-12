@@ -1,0 +1,4330 @@
+theory SecureDrop begin
+
+// Function signature and definition of the equational theory E
+
+builtins: diffie-hellman
+functions: APKE_AD/1, APKE_Dec_Adversary/2, APKE_Enc/5,
+           PKE_Dec_Adversary/2, PKE_Enc/2, bot/0, fst/1, kdf/1, pair/2, pk/1,
+           sdec/2, senc/2, sign/2, snd/1, true/0, verify/3
+equations:
+    APKE_AD(APKE_Enc(skS, pk(skR), m, ad, info)) = ad,
+    APKE_Dec_Adversary(APKE_Enc(skS, pk(skR), m, ad, info), skR) = m,
+    PKE_Dec_Adversary(PKE_Enc(pk(skR), m), skR) = m,
+    fst(<x.1, x.2>) = x.1,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2,
+    verify(sign(x.1, x.2), x.1, pk(x.2)) = true
+
+
+
+heuristic: o "./oracle.py"
+
+
+
+
+
+
+
+rule (modulo E) APKE_MessageSpaceAdversary:
+   [ In( m ) ] --[ AdversaryActivity( ) ]-> [ !APKE_MessageSpace( m ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction APKE_Consistency:
+  "∀ ct pkS skR ad info pt1 pt2 #t1 #t2.
+    ((APKE_Dec( ct, pkS, skR, ad, info, pt1 ) @ #t1) ∧
+     (APKE_Dec( ct, pkS, skR, ad, info, pt2 ) @ #t2)) ⇒
+    (pt1 = pt2)"
+  // safety formula
+
+restriction APKE_Correctness:
+  "∀ pt skAuth skDec ad info mDec #t1 #t2 #t3.
+    (((APKE_Dec( APKE_Enc(skAuth, pk(skDec), pt, ad, info), pk(skAuth),
+                 skDec, ad, info, mDec
+       ) @ #t1) ∧
+      (Honest( pk(skAuth) ) @ #t2)) ∧
+     (Honest( pk(skDec) ) @ #t3)) ⇒
+    (mDec = pt)"
+  // safety formula
+
+rule (modulo E) APKE_OutsiderAuth1[no_derivcheck]:
+   [ In( <~x, pk(~y), pt, ad, info> ) ]
+  -->
+   [ Out( APKE_Enc(~y, pk(~x), pt, ad, info) ), !APKE_MessageSpace( pt ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction APKE_OutsiderAuth2:
+  "∀ ct skAuth skDec ad info mDec #t1 #t2 #t3.
+    ((((APKE_Dec( ct, pk(skAuth), skDec, ad, info, mDec ) @ #t1) ∧
+       (Honest( pk(skAuth) ) @ #t2)) ∧
+      (Honest( pk(skDec) ) @ #t3)) ∧
+     (¬(mDec = bot))) ⇒
+    (ct = APKE_Enc(skAuth, pk(skDec), mDec, ad, info))"
+  // safety formula
+
+rule (modulo E) PKE_MessageSpaceAdversary:
+   [ In( m ) ] --[ AdversaryActivity( ) ]-> [ !PKE_MessageSpace( m ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction PKE_Consistency:
+  "∀ ct skR pt1 pt2 #t1 #t2.
+    ((PKE_Dec( ct, skR, pt1 ) @ #t1) ∧ (PKE_Dec( ct, skR, pt2 ) @ #t2)) ⇒
+    (pt1 = pt2)"
+  // safety formula
+
+restriction PKE_Correctness:
+  "∀ pt skR mDec #t1 #t2.
+    ((PKE_Dec( PKE_Enc(pk(skR), pt), skR, mDec ) @ #t1) ∧
+     (Honest( pk(skR) ) @ #t2)) ⇒
+    (mDec = pt)"
+  // safety formula
+
+rule (modulo E) ClientOut[color=#ffffff]:
+   [ Client_Out( ~sess, $Server, msg ), !SecureDropInstance( $Server ) ]
+  -->
+   [ !Client( ~sess, $Server, msg ) ]
+
+  // loop breaker: [0]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerOut[color=#ffffff]:
+   [ Server_Out( ~sess, $Server, msg ), !SecureDropInstance( $Server ) ]
+  -->
+   [ !Server( ~sess, $Server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ClientToServer[color=#ffffff]:
+   [ !Client( ~sess, $Server, msg ) ]
+  -->
+   [ Server_In( ~sess, $Server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerToClient[color=#ffffff]:
+   [ !Server( ~sess, $Server, msg ) ]
+  -->
+   [ Client_In( ~sess, $Server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) AdversaryClientOut[color=#ff6961]:
+   [ In( ~sess ), In( msg ), !SecureDropInstance( $Server ) ]
+  --[ AdversaryActivity( ) ]->
+   [ !Client( ~sess, $Server, msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerCompromise[color=#ff6961]:
+   [ !SecureDropInstance( $Server ) ]
+  --[ AdversaryActivity( ), SecureDropInstanceCompromise( $Server ) ]->
+   [ !ActiveCompromise( $Server ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Snapshot[color=#ff6961]:
+   [ !SecureDropInstance( $Server ) ]
+  --[ AdversaryActivity( ), SecureDropInstanceReadAccess( $Server ) ]->
+   [ !PassiveCompromise( $Server ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerToAdversaryClient[color=#ff6961]:
+   [ In( adversarySess ), !Server( adversarySess, $Server, msg ) ]
+  --[ AdversaryActivity( ), ServerSources( msg ) ]->
+   [ Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerAdversaryFromClient[color=#ff6961]:
+   [ !Client( ~sess, $Server, msg ), !ActiveCompromise( $Server ) ]
+  --[ AdversaryActivity( ), ClientSources( msg ) ]->
+   [ Out( msg ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) ServerAdversaryToClient[color=#ff6961]:
+   [ !Client( ~sess, $Server, msg ), !ActiveCompromise( $Server ), In( m ) ]
+  --[ AdversaryActivity( ) ]->
+   [ !Server( ~sess, $Server, m ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) PQAttackerStart[color=#ff6961]:
+   [ ] --[ PQAttack( ), AdversaryActivity( ) ]-> [ !PQAttacker( ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) PQAttacker[color=#ff6961]:
+   [ !PQAttacker( ), !NonPQSecKey( k ) ] --> [ Out( k ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction PQAttacker:
+  "∀ #compr #t.
+    ((PQAttack( ) @ #compr) ∧ (PrePQAttack( ) @ #t)) ⇒ (#t < #compr)"
+  // safety formula
+
+rule (modulo E) Register_Newsroom_Key[color=#ffee00]:
+   [ Fr( ~ltk ) ]
+  --[
+  PrePQAttack( ), OnlyOnce( $NR ), IsNewsroomKey( $NR, ~ltk ),
+  Honest( pk(~ltk) )
+  ]->
+   [
+   !SecureDropInstance( $NR ), !LongTerm_Newsroom_Key( $NR, ~ltk ),
+   !Public_Newsroom_Key( $NR, pk(~ltk) ), Out( pk(~ltk) ),
+   !NonPQSecKey( ~ltk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Newsroom_Key[color=#ff6961]:
+   [ !LongTerm_Newsroom_Key( $NR, ~ltk ) ]
+  --[ Reveal_Newsroom_Key( $NR ), AdversaryActivity( ) ]->
+   [ Out( ~ltk ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma Easy_NewsroomKeySecrecy [reuse]:
+  all-traces
+  "∀ nr k #t1 #t2.
+    ((IsNewsroomKey( nr, k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ nr k #t1 #t2.
+  (IsNewsroomKey( nr, k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !KU( ~ltk ) @ #t2 )
+  case PQAttacker
+  by contradiction /* from formulas */
+next
+  case Reveal_Newsroom_Key
+  by contradiction /* from formulas */
+qed
+
+rule (modulo E) Register_Source_Passphrase[color=#ffee00]:
+   [ Fr( ~s_fetching_sk ), Fr( ~s_pke_sk ), Fr( ~s_apke_sk ) ]
+  --[
+  Honest( 'g'^~s_fetching_sk ), Honest( pk(~s_pke_sk) ),
+  Honest( pk(~s_apke_sk) ),
+  IsSourceFetchingKey( ~s_fetching_sk, 'g'^~s_fetching_sk ),
+  IsSourcePKEKey( ~s_pke_sk ), IsSourceAPKEKey( ~s_apke_sk ),
+  Source( pk(~s_apke_sk) ), SourceFetchPk( 'g'^~s_fetching_sk ),
+  PrePQAttack( )
+  ]->
+   [
+   !LongTerm_Source_Key( $A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+   !NonPQSecKey( ~s_fetching_sk ), !NonPQSecKey( ~s_pke_sk ),
+   Out( <'g'^~s_fetching_sk, pk(~s_pke_sk), pk(~s_apke_sk)> )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Source_Fetching[color=#ff6961]:
+   [ !LongTerm_Source_Key( $A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ) ]
+  --[ Reveal_Source_Fetching( 'g'^~s_fetching_sk ), AdversaryActivity( )
+  ]->
+   [ Out( ~s_fetching_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Source_PKE[color=#ff6961]:
+   [ !LongTerm_Source_Key( $A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ) ]
+  --[ Reveal_Source_PKE( pk(~s_pke_sk) ), AdversaryActivity( ) ]->
+   [ Out( ~s_pke_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Source_APKE[color=#ff6961]:
+   [ !LongTerm_Source_Key( $A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ) ]
+  --[ Reveal_Source_APKE( pk(~s_apke_sk) ), AdversaryActivity( ) ]->
+   [ Out( ~s_apke_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma Easy_SourceFetchingKeySecrecy [reuse]:
+  all-traces
+  "∀ k pc #t1 #t2.
+    ((IsSourceFetchingKey( k, pc ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Source_Fetching( pc ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k pc #t1 #t2.
+  (IsSourceFetchingKey( k, pc ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Source_Fetching( pc ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !KU( ~s_fetching_sk ) @ #t2 )
+  case PQAttacker
+  by contradiction /* from formulas */
+next
+  case Reveal_Source_Fetching
+  by contradiction /* from formulas */
+qed
+
+lemma Easy_SourcePKEKeySecrecy [reuse]:
+  all-traces
+  "∀ k #t1 #t2.
+    ((IsSourcePKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Source_PKE( pk(k) ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #t1 #t2.
+  (IsSourcePKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Source_PKE( pk(k) ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !KU( ~s_pke_sk ) @ #t2 )
+  case PQAttacker
+  by contradiction /* from formulas */
+next
+  case Reveal_Source_PKE
+  by contradiction /* from formulas */
+qed
+
+lemma Easy_SourceAPKEKeySecrecy [reuse]:
+  all-traces
+  "∀ k #t1 #t2.
+    ((IsSourceAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    (∃ #x. (Reveal_Source_APKE( pk(k) ) @ #x) ∧ (#x < #t2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #t1 #t2.
+  (IsSourceAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  ∀ #x. (Reveal_Source_APKE( pk(k) ) @ #x) ⇒ ¬(#x < #t2)"
+*/
+simplify
+solve( !KU( ~s_apke_sk ) @ #t2 )
+  case Reveal_Source_APKE
+  by contradiction /* from formulas */
+qed
+
+rule (modulo E) Journalist_Enrollment[color=#ffee00]:
+   [
+   !LongTerm_Newsroom_Key( $NR, ~nr_sk ), Fr( ~j_sig_sk ),
+   Fr( ~j_fetching_sk ), Fr( ~j_apke_sk )
+   ]
+  --[
+  Journalist_Verified( $NR, $J ), Honest( 'g'^~j_fetching_sk ),
+  Honest( pk(~j_sig_sk) ), Honest( pk(~j_apke_sk) ),
+  IsJournalistFetchingKey( ~j_fetching_sk, 'g'^~j_fetching_sk ),
+  IsJournalistSIGKey( $NR, ~j_sig_sk ), IsJournalistAPKEKey( ~j_apke_sk ),
+  OnlyOnce( $J ), PrePQAttack( )
+  ]->
+   [
+   Out( <pk(~j_sig_sk), 'g'^~j_fetching_sk, pk(~j_apke_sk),
+         sign(<'nr-sig', pk(~j_sig_sk)>, ~nr_sk),
+         sign(<'j-sig-ltk', 'g'^~j_fetching_sk, pk(~j_apke_sk)>, ~j_sig_sk)>
+   ),
+   !Journalist_Enrolled( $NR, $J ),
+   !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ),
+   !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
+   !LongTerm_Journalist_APKE_Key( $J, ~j_apke_sk ),
+   !NonPQSecKey( ~j_sig_sk ), !NonPQSecKey( ~j_fetching_sk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_SIG_Key[color=#ff6961]:
+   [ !LongTerm_Journalist_SIG_Key( $NR, $A, ~j_sig_sk ) ]
+  --[ Reveal_Journalist_SIG_Key( $NR, pk(~j_sig_sk) ), AdversaryActivity( )
+  ]->
+   [ Out( ~j_sig_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_Fetching[color=#ff6961]:
+   [ !LongTerm_Journalist_FETCHING_Key( $A, ~j_fetching_sk ) ]
+  --[
+  Reveal_Journalist_Fetching( 'g'^~j_fetching_sk ), AdversaryActivity( )
+  ]->
+   [ Out( ~j_fetching_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_APKE[color=#ff6961]:
+   [ !LongTerm_Journalist_APKE_Key( $A, ~j_apke_sk ) ]
+  --[ Reveal_Journalist_APKE( pk(~j_apke_sk) ), AdversaryActivity( ) ]->
+   [ Out( ~j_apke_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma Easy_JournalistFetchingKeySecrecy [reuse]:
+  all-traces
+  "∀ k pc #t1 #t2.
+    ((IsJournalistFetchingKey( k, pc ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Journalist_Fetching( pc ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k pc #t1 #t2.
+  (IsJournalistFetchingKey( k, pc ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Journalist_Fetching( pc ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !LongTerm_Newsroom_Key( $NR, ~nr_sk ) ▶₀ #t1 )
+  case Register_Newsroom_Key
+  solve( !KU( ~j_fetching_sk ) @ #t2 )
+    case PQAttacker
+    by contradiction /* from formulas */
+  next
+    case Reveal_Journalist_Fetching
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Easy_JournalistSIGKeySecrecy [reuse]:
+  all-traces
+  "∀ nr k #t1 #t2.
+    ((IsJournalistSIGKey( nr, k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Journalist_SIG_Key( nr, pk(k) ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ nr k #t1 #t2.
+  (IsJournalistSIGKey( nr, k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Journalist_SIG_Key( nr, pk(k) ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !LongTerm_Newsroom_Key( $NR, ~nr_sk ) ▶₀ #t1 )
+  case Register_Newsroom_Key
+  solve( !KU( ~j_sig_sk ) @ #t2 )
+    case PQAttacker
+    by contradiction /* from formulas */
+  next
+    case Reveal_Journalist_SIG_Key
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Easy_JournalistAPKEKeySecrecy [reuse]:
+  all-traces
+  "∀ k #t1 #t2.
+    ((IsJournalistAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    (∃ #x. (Reveal_Journalist_APKE( pk(k) ) @ #x) ∧ (#x < #t2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #t1 #t2.
+  (IsJournalistAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  ∀ #x. (Reveal_Journalist_APKE( pk(k) ) @ #x) ⇒ ¬(#x < #t2)"
+*/
+simplify
+solve( !LongTerm_Newsroom_Key( $NR, ~nr_sk ) ▶₀ #t1 )
+  case Register_Newsroom_Key
+  solve( !KU( ~j_apke_sk ) @ #t2 )
+    case Reveal_Journalist_APKE
+    by contradiction /* from formulas */
+  qed
+qed
+
+rule (modulo E) Journalist_Register_Ephemeral_Key[color=#ffee00]:
+   [
+   !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ), Fr( ~j_epke_sk ),
+   Fr( ~j_eapke_sk )
+   ]
+  --[
+  Honest( pk(~j_epke_sk) ), Honest( pk(~j_eapke_sk) ),
+  IsJournalistEPKEKey( ~j_epke_sk ), IsJournalistEAPKEKey( ~j_eapke_sk ),
+  PrePQAttack( )
+  ]->
+   [
+   Out( <pk(~j_epke_sk), pk(~j_eapke_sk),
+         sign(<'j-sig-eph', pk(~j_epke_sk), pk(~j_eapke_sk)>, ~j_sig_sk)>
+   ),
+   Journalist_Ephemeral_Key( $J, ~j_epke_sk, ~j_eapke_sk ),
+   !Journalist_Ephemeral_Key_Reveal( $J, ~j_epke_sk, ~j_eapke_sk ),
+   !NonPQSecKey( ~j_epke_sk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_EPKE[color=#ff6961]:
+   [ !Journalist_Ephemeral_Key_Reveal( $J, ~j_epke_sk, ~j_eapke_sk ) ]
+  --[ Reveal_Journalist_EPKE( pk(~j_epke_sk) ), AdversaryActivity( ) ]->
+   [ Out( ~j_epke_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Reveal_Journalist_EAPKE[color=#ff6961]:
+   [ !Journalist_Ephemeral_Key_Reveal( $J, ~j_epke_sk, ~j_eapke_sk ) ]
+  --[ Reveal_Journalist_EAPKE( pk(~j_eapke_sk) ), AdversaryActivity( ) ]->
+   [ Out( ~j_eapke_sk ) ]
+
+  /* has exactly the trivial AC variant */
+
+lemma Easy_JournalistEPKEKeySecrecy [reuse]:
+  all-traces
+  "∀ k #t1 #t2.
+    ((IsJournalistEPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    ((∃ #x. (Reveal_Journalist_EPKE( pk(k) ) @ #x) ∧ (#x < #t2)) ∨
+     (∃ #x. (PQAttack( ) @ #x) ∧ (#x < #t2)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #t1 #t2.
+  (IsJournalistEPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  (∀ #x. (Reveal_Journalist_EPKE( pk(k) ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (PQAttack( ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+simplify
+solve( !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ) ▶₀ #t1 )
+  case Journalist_Enrollment
+  solve( !KU( ~j_epke_sk ) @ #t2 )
+    case PQAttacker
+    by contradiction /* from formulas */
+  next
+    case Reveal_Journalist_EPKE
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Easy_JournalistEAPKEKeySecrecy [reuse]:
+  all-traces
+  "∀ k #t1 #t2.
+    ((IsJournalistEAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)) ⇒
+    (∃ #x. (Reveal_Journalist_EAPKE( pk(k) ) @ #x) ∧ (#x < #t2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ k #t1 #t2.
+  (IsJournalistEAPKEKey( k ) @ #t1) ∧ (!KU( k ) @ #t2)
+ ∧
+  ∀ #x. (Reveal_Journalist_EAPKE( pk(k) ) @ #x) ⇒ ¬(#x < #t2)"
+*/
+simplify
+solve( !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ) ▶₀ #t1 )
+  case Journalist_Enrollment
+  solve( !KU( ~j_eapke_sk ) @ #t2 )
+    case Reveal_Journalist_EAPKE
+    by contradiction /* from formulas */
+  qed
+qed
+
+rule (modulo E) Source_Send[color=#58a820, no_derivcheck]:
+   [
+   !LongTerm_Source_Key( $S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+   !Public_Newsroom_Key( $NR, nr_pk ),
+   In( <j_sig_pk, 'g'^k, j_apke_pk, j_epke_pk, j_eapke_pk, sig_j_sig_pk,
+        sig_j_ltk, sig_j_eph>
+   ),
+   Fr( ~sess ), Fr( ~x ), Fr( ~msg ), Fr( ~id )
+   ]
+  --[
+  Eq( verify(sig_j_sig_pk, <'nr-sig', j_sig_pk>, nr_pk), true ),
+  Eq( verify(sig_j_ltk, <'j-sig-ltk', 'g'^k, j_apke_pk>, j_sig_pk), true ),
+  Eq( verify(sig_j_eph, <'j-sig-eph', j_epke_pk, j_eapke_pk>, j_sig_pk),
+      true
+  ),
+  SourceSubmission( ~id, 'g'^~s_fetching_sk, pk(~s_apke_sk), j_eapke_pk,
+                    'g'^k, $NR, ~msg
+  ),
+  SubmissionSource( <
+                     APKE_Enc(~s_apke_sk, j_eapke_pk,
+                              <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, 'g'^k),
+                     PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^k^~x, 'g'^~x>
+  ),
+  ServerSource( <
+                 APKE_Enc(~s_apke_sk, j_eapke_pk,
+                          <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, 'g'^k),
+                 PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>)>
+  ),
+  ClientSession( ~sess ), SourceSubmissionFor( ~id, 'g'^k ),
+  ClassicSecret( ~x ),
+  Submit( ~id,
+          <
+           APKE_Enc(~s_apke_sk, j_eapke_pk,
+                    <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, 'g'^k),
+           PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^k^~x, 'g'^~x>
+  ),
+  PrePQAttack( )
+  ]->
+   [
+   !Submission( $NR, ~id,
+                <
+                 APKE_Enc(~s_apke_sk, j_eapke_pk,
+                          <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, 'g'^k),
+                 PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^k^~x, 'g'^~x>
+   ),
+   FetchToken( ~id ),
+   !APKE_MessageSpace( <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk),
+                        ~msg>
+   ),
+   !PKE_MessageSpace( <'pk', pk(~s_apke_sk)> ), !NonPQSecKey( ~x )
+   ]
+
+  /*
+  rule (modulo AC) Source_Send[color=#58a820, no_derivcheck]:
+     [
+     !LongTerm_Source_Key( $S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+     !Public_Newsroom_Key( $NR, nr_pk ),
+     In( <j_sig_pk, z, j_apke_pk, j_epke_pk, j_eapke_pk, sig_j_sig_pk,
+          sig_j_ltk, sig_j_eph>
+     ),
+     Fr( ~sess ), Fr( ~x ), Fr( ~msg ), Fr( ~id )
+     ]
+    --[
+    Eq( z.1, true ), Eq( z.2, true ), Eq( z.3, true ),
+    SourceSubmission( ~id, 'g'^~s_fetching_sk, pk(~s_apke_sk), j_eapke_pk, z,
+                      $NR, ~msg
+    ),
+    SubmissionSource( <
+                       APKE_Enc(~s_apke_sk, j_eapke_pk,
+                                <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, z),
+                       PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^x.1, 'g'^~x>
+    ),
+    ServerSource( <
+                   APKE_Enc(~s_apke_sk, j_eapke_pk,
+                            <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, z),
+                   PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>)>
+    ),
+    ClientSession( ~sess ), SourceSubmissionFor( ~id, z ),
+    ClassicSecret( ~x ),
+    Submit( ~id,
+            <
+             APKE_Enc(~s_apke_sk, j_eapke_pk,
+                      <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, z),
+             PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^x.1, 'g'^~x>
+    ),
+    PrePQAttack( )
+    ]->
+     [
+     !Submission( $NR, ~id,
+                  <
+                   APKE_Enc(~s_apke_sk, j_eapke_pk,
+                            <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk), ~msg>, $NR, z),
+                   PKE_Enc(j_epke_pk, <'pk', pk(~s_apke_sk)>), 'g'^x.1, 'g'^~x>
+     ),
+     FetchToken( ~id ),
+     !APKE_MessageSpace( <'submission', 'g'^~s_fetching_sk, pk(~s_pke_sk),
+                          ~msg>
+     ),
+     !PKE_MessageSpace( <'pk', pk(~s_apke_sk)> ), !NonPQSecKey( ~x )
+     ]
+    variants (modulo AC)
+     1. ~x    = ~x.43
+        j_apke_pk
+              = j_apke_pk.44
+        j_eapke_pk
+              = j_eapke_pk.45
+        j_epke_pk
+              = j_epke_pk.46
+        j_sig_pk
+              = j_sig_pk.47
+        nr_pk = nr_pk.49
+        sig_j_eph
+              = sig_j_eph.50
+        sig_j_ltk
+              = sig_j_ltk.51
+        sig_j_sig_pk
+              = sig_j_sig_pk.52
+        z     = 'g'
+        x.1   = ~x.43
+        z.1   = verify(sig_j_sig_pk.52, <'nr-sig', j_sig_pk.47>, nr_pk.49)
+        z.2   = verify(sig_j_ltk.51, <'j-sig-ltk', 'g', j_apke_pk.44>,
+                       j_sig_pk.47)
+        z.3   = verify(sig_j_eph.50, <'j-sig-eph', j_epke_pk.46, j_eapke_pk.45>,
+                       j_sig_pk.47)
+
+     2. ~x    = ~x.313
+        j_apke_pk
+              = j_apke_pk.314
+        j_eapke_pk
+              = j_eapke_pk.315
+        j_epke_pk
+              = j_epke_pk.316
+        j_sig_pk
+              = j_sig_pk.317
+        nr_pk = nr_pk.319
+        sig_j_eph
+              = sig_j_eph.320
+        sig_j_ltk
+              = sig_j_ltk.321
+        sig_j_sig_pk
+              = sig_j_sig_pk.322
+        z     = 'g'^k.616
+        x.1   = (~x.313*k.616)
+        z.1   = verify(sig_j_sig_pk.322, <'nr-sig', j_sig_pk.317>, nr_pk.319)
+        z.2   = verify(sig_j_ltk.321, <'j-sig-ltk', 'g'^k.616, j_apke_pk.314>,
+                       j_sig_pk.317)
+        z.3   = verify(sig_j_eph.320,
+                       <'j-sig-eph', j_epke_pk.316, j_eapke_pk.315>, j_sig_pk.317)
+
+     3. ~x    = ~x.314
+        j_apke_pk
+              = j_apke_pk.315
+        j_eapke_pk
+              = j_eapke_pk.316
+        j_epke_pk
+              = j_epke_pk.317
+        j_sig_pk
+              = j_sig_pk.318
+        nr_pk = pk(x.618)
+        sig_j_eph
+              = sig_j_eph.321
+        sig_j_ltk
+              = sig_j_ltk.322
+        sig_j_sig_pk
+              = sign(<'nr-sig', j_sig_pk.318>, x.618)
+        z     = 'g'
+        x.1   = ~x.314
+        z.1   = true
+        z.2   = verify(sig_j_ltk.322, <'j-sig-ltk', 'g', j_apke_pk.315>,
+                       j_sig_pk.318)
+        z.3   = verify(sig_j_eph.321,
+                       <'j-sig-eph', j_epke_pk.317, j_eapke_pk.316>, j_sig_pk.318)
+
+     4. ~x    = ~x.315
+        j_apke_pk
+              = j_apke_pk.316
+        j_eapke_pk
+              = j_eapke_pk.317
+        j_epke_pk
+              = j_epke_pk.318
+        j_sig_pk
+              = pk(x.620)
+        nr_pk = nr_pk.321
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.318, j_eapke_pk.317>, x.620)
+        sig_j_ltk
+              = sig_j_ltk.323
+        sig_j_sig_pk
+              = sig_j_sig_pk.324
+        z     = 'g'
+        x.1   = ~x.315
+        z.1   = verify(sig_j_sig_pk.324, <'nr-sig', pk(x.620)>, nr_pk.321)
+        z.2   = verify(sig_j_ltk.323, <'j-sig-ltk', 'g', j_apke_pk.316>,
+                       pk(x.620))
+        z.3   = true
+
+     5. ~x    = ~x.316
+        j_apke_pk
+              = j_apke_pk.317
+        j_eapke_pk
+              = j_eapke_pk.318
+        j_epke_pk
+              = j_epke_pk.319
+        j_sig_pk
+              = j_sig_pk.320
+        nr_pk = pk(x.621)
+        sig_j_eph
+              = sig_j_eph.323
+        sig_j_ltk
+              = sig_j_ltk.324
+        sig_j_sig_pk
+              = sign(<'nr-sig', j_sig_pk.320>, x.621)
+        z     = 'g'^k.622
+        x.1   = (~x.316*k.622)
+        z.1   = true
+        z.2   = verify(sig_j_ltk.324, <'j-sig-ltk', 'g'^k.622, j_apke_pk.317>,
+                       j_sig_pk.320)
+        z.3   = verify(sig_j_eph.323,
+                       <'j-sig-eph', j_epke_pk.319, j_eapke_pk.318>, j_sig_pk.320)
+
+     6. ~x    = ~x.316
+        j_apke_pk
+              = j_apke_pk.317
+        j_eapke_pk
+              = j_eapke_pk.318
+        j_epke_pk
+              = j_epke_pk.319
+        j_sig_pk
+              = pk(x.621)
+        nr_pk = nr_pk.322
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.319, j_eapke_pk.318>, x.621)
+        sig_j_ltk
+              = sig_j_ltk.324
+        sig_j_sig_pk
+              = sig_j_sig_pk.325
+        z     = 'g'^k.622
+        x.1   = (~x.316*k.622)
+        z.1   = verify(sig_j_sig_pk.325, <'nr-sig', pk(x.621)>, nr_pk.322)
+        z.2   = verify(sig_j_ltk.324, <'j-sig-ltk', 'g'^k.622, j_apke_pk.317>,
+                       pk(x.621))
+        z.3   = true
+
+     7. ~x    = ~x.316
+        j_apke_pk
+              = j_apke_pk.317
+        j_eapke_pk
+              = j_eapke_pk.318
+        j_epke_pk
+              = j_epke_pk.319
+        j_sig_pk
+              = pk(x.621)
+        nr_pk = pk(x.622)
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.319, j_eapke_pk.318>, x.621)
+        sig_j_ltk
+              = sig_j_ltk.324
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.621)>, x.622)
+        z     = 'g'
+        x.1   = ~x.316
+        z.1   = true
+        z.2   = verify(sig_j_ltk.324, <'j-sig-ltk', 'g', j_apke_pk.317>,
+                       pk(x.621))
+        z.3   = true
+
+     8. ~x    = ~x.316
+        j_apke_pk
+              = j_apke_pk.317
+        j_eapke_pk
+              = j_eapke_pk.318
+        j_epke_pk
+              = j_epke_pk.319
+        j_sig_pk
+              = pk(x.622)
+        nr_pk = nr_pk.322
+        sig_j_eph
+              = sig_j_eph.323
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g', j_apke_pk.317>, x.622)
+        sig_j_sig_pk
+              = sig_j_sig_pk.325
+        z     = 'g'
+        x.1   = ~x.316
+        z.1   = verify(sig_j_sig_pk.325, <'nr-sig', pk(x.622)>, nr_pk.322)
+        z.2   = true
+        z.3   = verify(sig_j_eph.323,
+                       <'j-sig-eph', j_epke_pk.319, j_eapke_pk.318>, pk(x.622))
+
+     9. ~x    = ~x.316
+        j_apke_pk
+              = j_apke_pk.317
+        j_eapke_pk
+              = j_eapke_pk.318
+        j_epke_pk
+              = j_epke_pk.319
+        j_sig_pk
+              = pk(x.622)
+        nr_pk = nr_pk.322
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.319, j_eapke_pk.318>, x.622)
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g', j_apke_pk.317>, x.622)
+        sig_j_sig_pk
+              = sig_j_sig_pk.325
+        z     = 'g'
+        x.1   = ~x.316
+        z.1   = verify(sig_j_sig_pk.325, <'nr-sig', pk(x.622)>, nr_pk.322)
+        z.2   = true
+        z.3   = true
+
+    10. ~x    = ~x.317
+        j_apke_pk
+              = j_apke_pk.318
+        j_eapke_pk
+              = j_eapke_pk.319
+        j_epke_pk
+              = j_epke_pk.320
+        j_sig_pk
+              = pk(x.623)
+        nr_pk = nr_pk.323
+        sig_j_eph
+              = sig_j_eph.324
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g'^x.624, j_apke_pk.318>, x.623)
+        sig_j_sig_pk
+              = sig_j_sig_pk.326
+        z     = 'g'^x.624
+        x.1   = (~x.317*x.624)
+        z.1   = verify(sig_j_sig_pk.326, <'nr-sig', pk(x.623)>, nr_pk.323)
+        z.2   = true
+        z.3   = verify(sig_j_eph.324,
+                       <'j-sig-eph', j_epke_pk.320, j_eapke_pk.319>, pk(x.623))
+
+    11. ~x    = ~x.317
+        j_apke_pk
+              = j_apke_pk.318
+        j_eapke_pk
+              = j_eapke_pk.319
+        j_epke_pk
+              = j_epke_pk.320
+        j_sig_pk
+              = pk(x.623)
+        nr_pk = nr_pk.323
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.320, j_eapke_pk.319>, x.623)
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g'^x.624, j_apke_pk.318>, x.623)
+        sig_j_sig_pk
+              = sig_j_sig_pk.326
+        z     = 'g'^x.624
+        x.1   = (~x.317*x.624)
+        z.1   = verify(sig_j_sig_pk.326, <'nr-sig', pk(x.623)>, nr_pk.323)
+        z.2   = true
+        z.3   = true
+
+    12. ~x    = ~x.317
+        j_apke_pk
+              = j_apke_pk.318
+        j_eapke_pk
+              = j_eapke_pk.319
+        j_epke_pk
+              = j_epke_pk.320
+        j_sig_pk
+              = pk(x.623)
+        nr_pk = pk(x.624)
+        sig_j_eph
+              = sig_j_eph.324
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g', j_apke_pk.318>, x.623)
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.623)>, x.624)
+        z     = 'g'
+        x.1   = ~x.317
+        z.1   = true
+        z.2   = true
+        z.3   = verify(sig_j_eph.324,
+                       <'j-sig-eph', j_epke_pk.320, j_eapke_pk.319>, pk(x.623))
+
+    13. ~x    = ~x.317
+        j_apke_pk
+              = j_apke_pk.318
+        j_eapke_pk
+              = j_eapke_pk.319
+        j_epke_pk
+              = j_epke_pk.320
+        j_sig_pk
+              = pk(x.623)
+        nr_pk = pk(x.624)
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.320, j_eapke_pk.319>, x.623)
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g', j_apke_pk.318>, x.623)
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.623)>, x.624)
+        z     = 'g'
+        x.1   = ~x.317
+        z.1   = true
+        z.2   = true
+        z.3   = true
+
+    14. ~x    = ~x.318
+        j_apke_pk
+              = j_apke_pk.319
+        j_eapke_pk
+              = j_eapke_pk.320
+        j_epke_pk
+              = j_epke_pk.321
+        j_sig_pk
+              = pk(x.623)
+        nr_pk = pk(x.625)
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.321, j_eapke_pk.320>, x.623)
+        sig_j_ltk
+              = sig_j_ltk.326
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.623)>, x.625)
+        z     = 'g'^k.626
+        x.1   = (~x.318*k.626)
+        z.1   = true
+        z.2   = verify(sig_j_ltk.326, <'j-sig-ltk', 'g'^k.626, j_apke_pk.319>,
+                       pk(x.623))
+        z.3   = true
+
+    15. ~x    = ~x.318
+        j_apke_pk
+              = j_apke_pk.319
+        j_eapke_pk
+              = j_eapke_pk.320
+        j_epke_pk
+              = j_epke_pk.321
+        j_sig_pk
+              = pk(x.624)
+        nr_pk = pk(x.626)
+        sig_j_eph
+              = sig_j_eph.325
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g'^x.625, j_apke_pk.319>, x.624)
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.624)>, x.626)
+        z     = 'g'^x.625
+        x.1   = (~x.318*x.625)
+        z.1   = true
+        z.2   = true
+        z.3   = verify(sig_j_eph.325,
+                       <'j-sig-eph', j_epke_pk.321, j_eapke_pk.320>, pk(x.624))
+
+    16. ~x    = ~x.318
+        j_apke_pk
+              = j_apke_pk.319
+        j_eapke_pk
+              = j_eapke_pk.320
+        j_epke_pk
+              = j_epke_pk.321
+        j_sig_pk
+              = pk(x.624)
+        nr_pk = pk(x.626)
+        sig_j_eph
+              = sign(<'j-sig-eph', j_epke_pk.321, j_eapke_pk.320>, x.624)
+        sig_j_ltk
+              = sign(<'j-sig-ltk', 'g'^x.625, j_apke_pk.319>, x.624)
+        sig_j_sig_pk
+              = sign(<'nr-sig', pk(x.624)>, x.626)
+        z     = 'g'^x.625
+        x.1   = (~x.318*x.625)
+        z.1   = true
+        z.2   = true
+        z.3   = true
+  */
+
+rule (modulo E) Source_Query[color=#58a820]:
+   [
+   !LongTerm_Source_Key( $S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+   !Public_Newsroom_Key( $NR, nr_pk ), Fr( ~sess )
+   ]
+  --[ ClientSource( 'request' ), PrePQAttack( ), ClientSession( ~sess ) ]->
+   [
+   Client_Out( ~sess, $NR, 'request' ),
+   SourceQueried( $S, $NR, ~sess, ~s_fetching_sk )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Source_ChallengeResponse[color=#58a820, no_derivcheck]:
+   [
+   SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ),
+   Client_In( ~sess, $NR,
+              <'g'^k, senc(id, kdf(<$NR, 'g'^k^~s_fetching_sk>))>
+   )
+   ]
+  --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+   [ Client_Out( ~sess, $NR, id ), SourceResponded( $S, $NR, ~sess ) ]
+
+  /*
+  rule (modulo AC) Source_ChallengeResponse[color=#58a820, no_derivcheck]:
+     [
+     SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ),
+     Client_In( ~sess, $NR, <z, senc(id, kdf(<$NR, z.1>))> )
+     ]
+    --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+     [ Client_Out( ~sess, $NR, id ), SourceResponded( $S, $NR, ~sess ) ]
+    variants (modulo AC)
+    1. ~s_fetching_sk
+             = ~s_fetching_sk.9
+       z     = 'g'
+       z.1   = 'g'^~s_fetching_sk.9
+
+    2. ~s_fetching_sk
+             = ~s_fetching_sk.9
+       z     = 'g'^k.9
+       z.1   = 'g'^(~s_fetching_sk.9*k.9)
+
+    3. ~s_fetching_sk
+             = ~x.9
+       z     = 'g'^inv(~x.9)
+       z.1   = 'g'
+
+    4. ~s_fetching_sk
+             = ~x.9
+       z     = 'g'^inv((~x.9*x.12))
+       z.1   = 'g'^inv(x.12)
+
+    5. ~s_fetching_sk
+             = ~x.9
+       z     = 'g'^(x.12*inv(~x.9))
+       z.1   = 'g'^x.12
+
+    6. ~s_fetching_sk
+             = ~x.9
+       z     = 'g'^(x.12*inv((~x.9*x.13)))
+       z.1   = 'g'^(x.12*inv(x.13))
+  */
+
+rule (modulo E) Source_Recv[color=#58a820]:
+   [
+   SourceResponded( $S, $NR, ~sess ), Client_In( ~sess, $NR, <ct1, ct2> ),
+   In( <j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_sig_pk, sig_j_ltk> ),
+   !APKE_MessageSpace( <'submission', m> ),
+   !PKE_MessageSpace( <'pk', j_apke_pk> ),
+   !LongTerm_Source_Key( $S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+   !Public_Newsroom_Key( $NR, nr_pk )
+   ]
+  --[
+  APKE_Dec( ct1, j_apke_pk, ~s_apke_sk, $NR, 'g'^~s_fetching_sk,
+            <'submission', m>
+  ),
+  PKE_Dec( ct2, ~s_pke_sk, <'pk', j_apke_pk> ),
+  Eq( verify(sig_j_sig_pk, <'nr-sig', j_sig_pk>, nr_pk), true ),
+  Eq( verify(sig_j_ltk, <'j-sig-ltk', j_fetching_pk, j_apke_pk>, j_sig_pk),
+      true
+  ),
+  Source_Received( pk(~s_apke_sk), 'g'^~s_fetching_sk, j_apke_pk, $NR, m ),
+  PrePQAttack( ), ClientSession( ~sess )
+  ]->
+   [ ]
+
+  /*
+  rule (modulo AC) Source_Recv[color=#58a820]:
+     [
+     SourceResponded( $S, $NR, ~sess ), Client_In( ~sess, $NR, <ct1, ct2> ),
+     In( <j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_sig_pk, sig_j_ltk> ),
+     !APKE_MessageSpace( <'submission', m> ),
+     !PKE_MessageSpace( <'pk', j_apke_pk> ),
+     !LongTerm_Source_Key( $S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk ),
+     !Public_Newsroom_Key( $NR, nr_pk )
+     ]
+    --[
+    APKE_Dec( ct1, j_apke_pk, ~s_apke_sk, $NR, 'g'^~s_fetching_sk,
+              <'submission', m>
+    ),
+    PKE_Dec( ct2, ~s_pke_sk, <'pk', j_apke_pk> ), Eq( z, true ),
+    Eq( z.1, true ),
+    Source_Received( pk(~s_apke_sk), 'g'^~s_fetching_sk, j_apke_pk, $NR, m ),
+    PrePQAttack( ), ClientSession( ~sess )
+    ]->
+     [ ]
+    variants (modulo AC)
+    1. j_apke_pk
+             = j_apke_pk.28
+       j_fetching_pk
+             = j_fetching_pk.29
+       j_sig_pk
+             = j_sig_pk.30
+       nr_pk = nr_pk.32
+       sig_j_ltk
+             = sig_j_ltk.33
+       sig_j_sig_pk
+             = sig_j_sig_pk.34
+       z     = verify(sig_j_sig_pk.34, <'nr-sig', j_sig_pk.30>, nr_pk.32)
+       z.1   = verify(sig_j_ltk.33,
+                      <'j-sig-ltk', j_fetching_pk.29, j_apke_pk.28>, j_sig_pk.30)
+
+    2. j_apke_pk
+             = j_apke_pk.115
+       j_fetching_pk
+             = j_fetching_pk.116
+       j_sig_pk
+             = j_sig_pk.117
+       nr_pk = pk(x.220)
+       sig_j_ltk
+             = sig_j_ltk.120
+       sig_j_sig_pk
+             = sign(<'nr-sig', j_sig_pk.117>, x.220)
+       z     = true
+       z.1   = verify(sig_j_ltk.120,
+                      <'j-sig-ltk', j_fetching_pk.116, j_apke_pk.115>, j_sig_pk.117)
+
+    3. j_apke_pk
+             = j_apke_pk.115
+       j_fetching_pk
+             = j_fetching_pk.116
+       j_sig_pk
+             = pk(x.220)
+       nr_pk = nr_pk.119
+       sig_j_ltk
+             = sign(<'j-sig-ltk', j_fetching_pk.116, j_apke_pk.115>, x.220)
+       sig_j_sig_pk
+             = sig_j_sig_pk.121
+       z     = verify(sig_j_sig_pk.121, <'nr-sig', pk(x.220)>, nr_pk.119)
+       z.1   = true
+
+    4. j_apke_pk
+             = j_apke_pk.117
+       j_fetching_pk
+             = j_fetching_pk.118
+       j_sig_pk
+             = pk(x.222)
+       nr_pk = pk(x.224)
+       sig_j_ltk
+             = sign(<'j-sig-ltk', j_fetching_pk.118, j_apke_pk.117>, x.222)
+       sig_j_sig_pk
+             = sign(<'nr-sig', pk(x.222)>, x.224)
+       z     = true
+       z.1   = true
+  */
+
+rule (modulo E) Journalist_Query[color=#0a0aff]:
+   [ !Journalist_Enrolled( $NR, $J ), Fr( ~sess ) ]
+  --[ ClientSource( 'request' ), ClientSession( ~sess ), PrePQAttack( ) ]->
+   [
+   Client_Out( ~sess, $NR, 'request' ), JournalistQueried( $J, $NR, ~sess )
+   ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) Journalist_ChallengeResponse[color=#0a0aff,
+                                             no_derivcheck]:
+   [
+   JournalistQueried( $J, $NR, ~sess ),
+   !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
+   Client_In( ~sess, $NR,
+              <'g'^k, senc(id, kdf(<$NR, 'g'^k^~j_fetching_sk>))>
+   )
+   ]
+  --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+   [ Client_Out( ~sess, $NR, id ), JournalistResponded( $J, $NR, ~sess ) ]
+
+  /*
+  rule (modulo AC) Journalist_ChallengeResponse[color=#0a0aff,
+                                                no_derivcheck]:
+     [
+     JournalistQueried( $J, $NR, ~sess ),
+     !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
+     Client_In( ~sess, $NR, <z, senc(id, kdf(<$NR, z.1>))> )
+     ]
+    --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+     [ Client_Out( ~sess, $NR, id ), JournalistResponded( $J, $NR, ~sess ) ]
+    variants (modulo AC)
+    1. ~j_fetching_sk
+             = ~j_fetching_sk.9
+       z     = 'g'
+       z.1   = 'g'^~j_fetching_sk.9
+
+    2. ~j_fetching_sk
+             = ~j_fetching_sk.9
+       z     = 'g'^k.9
+       z.1   = 'g'^(~j_fetching_sk.9*k.9)
+
+    3. ~j_fetching_sk
+             = ~x.9
+       z     = 'g'^inv(~x.9)
+       z.1   = 'g'
+
+    4. ~j_fetching_sk
+             = ~x.9
+       z     = 'g'^inv((~x.9*x.12))
+       z.1   = 'g'^inv(x.12)
+
+    5. ~j_fetching_sk
+             = ~x.9
+       z     = 'g'^(x.12*inv(~x.9))
+       z.1   = 'g'^x.12
+
+    6. ~j_fetching_sk
+             = ~x.9
+       z     = 'g'^(x.12*inv((~x.9*x.13)))
+       z.1   = 'g'^(x.12*inv(x.13))
+  */
+
+rule (modulo E) Journalist_Recv[color=#0a0aff, no_derivcheck]:
+   [
+   JournalistResponded( $J, $NR, ~sess ),
+   !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ),
+   !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
+   Journalist_Ephemeral_Key( $J, ~j_epke_sk, ~j_eapke_sk ),
+   Client_In( ~sess, $NR, <ct1, ct2> ),
+   !APKE_MessageSpace( <'submission', 'g'^k, s_pke_pk, m> ),
+   !PKE_MessageSpace( <'pk', s_apke_pk> )
+   ]
+  --[
+  APKE_Dec( ct1, s_apke_pk, ~j_eapke_sk, $NR, 'g'^~j_fetching_sk,
+            <'submission', 'g'^k, s_pke_pk, m>
+  ),
+  PKE_Dec( ct2, ~j_epke_sk, <'pk', s_apke_pk> ),
+  Journalist_Received( pk(~j_eapke_sk), 'g'^~j_fetching_sk, $NR, 'g'^k,
+                       s_apke_pk, m
+  ),
+  ClientSession( ~sess ), PrePQAttack( )
+  ]->
+   [ Journalist_Recv( $J, pk(~j_eapke_sk), 'g'^k, s_pke_pk, s_apke_pk ) ]
+
+  // loop breaker: [6]
+  /*
+  rule (modulo AC) Journalist_Recv[color=#0a0aff, no_derivcheck]:
+     [
+     JournalistResponded( $J, $NR, ~sess ),
+     !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ),
+     !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
+     Journalist_Ephemeral_Key( $J, ~j_epke_sk, ~j_eapke_sk ),
+     Client_In( ~sess, $NR, <ct1, ct2> ),
+     !APKE_MessageSpace( <'submission', z, s_pke_pk, m> ),
+     !PKE_MessageSpace( <'pk', s_apke_pk> )
+     ]
+    --[
+    APKE_Dec( ct1, s_apke_pk, ~j_eapke_sk, $NR, 'g'^~j_fetching_sk,
+              <'submission', z, s_pke_pk, m>
+    ),
+    PKE_Dec( ct2, ~j_epke_sk, <'pk', s_apke_pk> ),
+    Journalist_Received( pk(~j_eapke_sk), 'g'^~j_fetching_sk, $NR, z,
+                         s_apke_pk, m
+    ),
+    ClientSession( ~sess ), PrePQAttack( )
+    ]->
+     [ Journalist_Recv( $J, pk(~j_eapke_sk), z, s_pke_pk, s_apke_pk ) ]
+    variants (modulo AC)
+    1. z     = 'g'
+
+    2. z     = 'g'^k.17
+    // loop breaker: [6]
+  */
+
+rule (modulo E) Journalist_Send[color=#0a0aff]:
+   [
+   Journalist_Recv( $J, j_eapke_pk, s_fetching_pk, s_pke_pk, s_apke_pk ),
+   !Journalist_Enrolled( $NR, $J ),
+   !LongTerm_Journalist_APKE_Key( $J, ~j_apke_sk ),
+   !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ),
+   !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ), Fr( ~sess ),
+   Fr( ~msg ), Fr( ~x ), Fr( ~id )
+   ]
+  --[
+  SubmissionSource( <
+                     APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                              s_fetching_pk),
+                     PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), s_fetching_pk^~x, 'g'^~x>
+  ),
+  ServerSource( <
+                 APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                          s_fetching_pk),
+                 PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>)>
+  ),
+  JournalistSubmission( ~id, pk(~j_apke_sk), j_eapke_pk, $NR, s_apke_pk,
+                        s_fetching_pk, ~msg
+  ),
+  ClientSession( ~sess ), JournalistSubmissionFor( ~id, s_fetching_pk ),
+  ClassicSecret( ~x ),
+  Submit( ~id,
+          <
+           APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                    s_fetching_pk),
+           PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), s_fetching_pk^~x, 'g'^~x>
+  ),
+  PrePQAttack( )
+  ]->
+   [
+   !Submission( $NR, ~id,
+                <
+                 APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                          s_fetching_pk),
+                 PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), s_fetching_pk^~x, 'g'^~x>
+   ),
+   FetchToken( ~id ), !APKE_MessageSpace( <'submission', ~msg> ),
+   !PKE_MessageSpace( <'pk', pk(~j_apke_sk)> ), !NonPQSecKey( ~x )
+   ]
+
+  /*
+  rule (modulo AC) Journalist_Send[color=#0a0aff]:
+     [
+     Journalist_Recv( $J, j_eapke_pk, s_fetching_pk, s_pke_pk, s_apke_pk ),
+     !Journalist_Enrolled( $NR, $J ),
+     !LongTerm_Journalist_APKE_Key( $J, ~j_apke_sk ),
+     !LongTerm_Journalist_SIG_Key( $NR, $J, ~j_sig_sk ),
+     !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ), Fr( ~sess ),
+     Fr( ~msg ), Fr( ~x ), Fr( ~id )
+     ]
+    --[
+    SubmissionSource( <
+                       APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                                s_fetching_pk),
+                       PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), z, 'g'^~x>
+    ),
+    ServerSource( <
+                   APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                            s_fetching_pk),
+                   PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>)>
+    ),
+    JournalistSubmission( ~id, pk(~j_apke_sk), j_eapke_pk, $NR, s_apke_pk,
+                          s_fetching_pk, ~msg
+    ),
+    ClientSession( ~sess ), JournalistSubmissionFor( ~id, s_fetching_pk ),
+    ClassicSecret( ~x ),
+    Submit( ~id,
+            <
+             APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                      s_fetching_pk),
+             PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), z, 'g'^~x>
+    ),
+    PrePQAttack( )
+    ]->
+     [
+     !Submission( $NR, ~id,
+                  <
+                   APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
+                            s_fetching_pk),
+                   PKE_Enc(s_pke_pk, <'pk', pk(~j_apke_sk)>), z, 'g'^~x>
+     ),
+     FetchToken( ~id ), !APKE_MessageSpace( <'submission', ~msg> ),
+     !PKE_MessageSpace( <'pk', pk(~j_apke_sk)> ), !NonPQSecKey( ~x )
+     ]
+    variants (modulo AC)
+    1. ~x    = ~x.21
+       s_fetching_pk
+             = s_fetching_pk.24
+       z     = s_fetching_pk.24^~x.21
+
+    2. ~x    = ~x.75
+       s_fetching_pk
+             = x.139^x.140
+       z     = x.139^(~x.75*x.140)
+
+    3. s_fetching_pk
+             = DH_neutral
+       z     = DH_neutral
+  */
+
+rule (modulo E) ServerChallenge[color=#c24bb8, no_derivcheck]:
+   [
+   Server_In( ~sess, $NR, 'request' ),
+   !Submission( $NR, ~id, <ct1, ct2, 'g'^k2, 'g'^k1> ), Fr( ~r ),
+   Fr( ~chall )
+   ]
+  --[
+  ServerSource( <'g'^k1^~r, senc(~chall, kdf(<$NR, 'g'^k2^~r>))> ),
+  ClientSource( ~chall ), FetchStart( ~id, $NR, 'g'^k2^~r, ~chall ),
+  ClassicSecret( ~r ), IsSubmission( ~id, <ct1, ct2, 'g'^k2, 'g'^k1> ),
+  PrePQAttack( )
+  ]->
+   [
+   Server_Out( ~sess, $NR, <'g'^k1^~r, senc(~chall, kdf(<$NR, 'g'^k2^~r>))>
+   ),
+   Challenged( $NR, ~sess, ~id, ~chall, ct1, ct2 )
+   ]
+
+  // loop breaker: [1]
+  /*
+  rule (modulo AC) ServerChallenge[color=#c24bb8, no_derivcheck]:
+     [
+     Server_In( ~sess, $NR, 'request' ),
+     !Submission( $NR, ~id, <ct1, ct2, z, z.1> ), Fr( ~r ), Fr( ~chall )
+     ]
+    --[
+    ServerSource( <'g'^x, senc(~chall, kdf(<$NR, 'g'^x.1>))> ),
+    ClientSource( ~chall ), FetchStart( ~id, $NR, 'g'^x.1, ~chall ),
+    ClassicSecret( ~r ), IsSubmission( ~id, <ct1, ct2, z, z.1> ),
+    PrePQAttack( )
+    ]->
+     [
+     Server_Out( ~sess, $NR, <'g'^x, senc(~chall, kdf(<$NR, 'g'^x.1>))> ),
+     Challenged( $NR, ~sess, ~id, ~chall, ct1, ct2 )
+     ]
+    variants (modulo AC)
+    1. ~r    = ~r.20
+       x     = ~r.20
+       z     = 'g'
+       x.1   = ~r.20
+       z.1   = 'g'
+
+    2. ~r    = ~r.76
+       x     = (~r.76*k1.147)
+       z     = 'g'
+       x.1   = ~r.76
+       z.1   = 'g'^k1.147
+
+    3. ~r    = ~r.76
+       x     = ~r.76
+       z     = 'g'^k2.147
+       x.1   = (~r.76*k2.147)
+       z.1   = 'g'
+
+    4. ~r    = ~r.76
+       x     = (~r.76*k1.147)
+       z     = 'g'^k2.147
+       x.1   = (~r.76*k2.147)
+       z.1   = 'g'^k1.147
+    // loop breaker: [1]
+  */
+
+rule (modulo E) ServerChallengeSuccess[color=#c24bb8]:
+   [
+   Challenged( $NR, ~sess, ~id, ~chall, ct1, ct2 ), FetchToken( ~id ),
+   Server_In( ~sess, $NR, ~chall )
+   ]
+  --[ Fetched( ~id ), PrePQAttack( ) ]->
+   [ Server_Out( ~sess, $NR, <ct1, ct2> ) ]
+
+  // loop breaker: [1]
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) AdversarySubmit[color=#ff6961]:
+   [ In( cts ), Fr( ~id ) ]
+  --[
+  Submitted( cts ), AdversaryActivity( ), AdversarySubmit( ~id ),
+  Submit( ~id, cts )
+  ]->
+   [ !Submission( $NR, ~id, cts ), FetchToken( ~id ) ]
+
+  /* has exactly the trivial AC variant */
+
+rule (modulo E) SubmissionAccess[color=#ff6961]:
+   [ !PassiveCompromise( $NR ), !Submission( $NR, ~id, cts ) ]
+  --[
+  SubmissionSources( cts ), DBRead( ~id ), IsSubmission( ~id, cts ),
+  AdversaryActivity( )
+  ]->
+   [ Out( cts ) ]
+
+  /* has exactly the trivial AC variant */
+
+restriction SubmissionAccessTime:
+  "∀ id #t1 #t2.
+    ((DBRead( id ) @ #t1) ∧ (Fetched( id ) @ #t2)) ⇒ (#t1 < #t2)"
+  // safety formula
+
+lemma Easy_Submissions [sources]:
+  all-traces
+  "∀ cts #t.
+    (SubmissionSources( cts ) @ #t) ⇒
+    ((∃ #x. SubmissionSource( cts ) @ #x) ∨
+     (∃ #x. (!KU( cts ) @ #x) ∧ (#x < #t)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ cts #t.
+  (SubmissionSources( cts ) @ #t)
+ ∧
+  (∀ #x. (SubmissionSource( cts ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (!KU( cts ) @ #x) ⇒ ¬(#x < #t))"
+*/
+induction
+  case empty_trace
+  by contradiction /* from formulas */
+next
+  case non_empty_trace
+  solve( (last(#t))  ∥
+         (∃ #x. (SubmissionSource( cts ) @ #x) ∧ ¬(last(#x)))  ∥
+         (∃ #x. (!KU( cts ) @ #x) ∧ (¬(last(#x))) ∧ (#x < #t)) )
+    case case_1
+    solve( !PassiveCompromise( $NR ) ▶₀ #t )
+      case Snapshot
+      solve( !Submission( $NR, ~id, cts ) ▶₁ #t )
+        case AdversarySubmit
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_001
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_002
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_003
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_004
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_005
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_006
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_007
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_008
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_009
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_010
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_011
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_012
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_013
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_014
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_015
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_016
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_017
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_018
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_019
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_020
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_021
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_022
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_023
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_024
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_025
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_026
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_027
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_028
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_029
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_030
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_031
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_032
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_033
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_034
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_035
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_036
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_037
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_038
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_039
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_040
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_041
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_042
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_043
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_044
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_045
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_046
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_047
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_048
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_049
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_050
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_051
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_052
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_053
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_054
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_055
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_056
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_057
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_058
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_059
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_060
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_061
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_062
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_063
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_064
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_065
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_066
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_067
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_068
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_069
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_070
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_071
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_072
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_073
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_074
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_075
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_076
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_077
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_078
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_079
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_080
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_081
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_082
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_083
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_084
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_085
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_086
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_087
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_088
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_089
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_090
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_091
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_092
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_093
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_094
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_095
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_096
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_097
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_098
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_099
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_100
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_101
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_102
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_103
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_104
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_105
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_106
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_107
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_108
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_109
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_110
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_111
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_112
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_113
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_114
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_115
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_116
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_117
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_118
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_119
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_120
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_121
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_122
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_123
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_124
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_125
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_126
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_127
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_128
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_129
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_130
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_131
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_132
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_133
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_134
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_135
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_136
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_137
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_138
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_139
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_140
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_141
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_142
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_143
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_144
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_145
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_146
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_147
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_148
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_149
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_150
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_151
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_152
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_153
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_154
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_155
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_156
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_157
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_158
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_159
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_160
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_161
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_162
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_163
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_164
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_165
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_166
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_167
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_168
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_169
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_170
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_171
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_172
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_173
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_174
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_175
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_176
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_177
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_178
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_179
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_180
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_181
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_182
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_183
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_184
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_185
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_186
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_187
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_188
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_189
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_190
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_191
+        by contradiction /* from formulas */
+      next
+        case Journalist_Send_case_192
+        by contradiction /* from formulas */
+      next
+        case Source_Send
+        by contradiction /* from formulas */
+      qed
+    qed
+  next
+    case case_2
+    by contradiction /* from formulas */
+  next
+    case case_3
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Auto_SecureChannelSources [sources]:
+  all-traces
+  "(∀ m #t.
+     (ClientSources( m ) @ #t) ⇒
+     ((∃ #x. ClientSource( m ) @ #x) ∨ (∃ #x. (!KU( m ) @ #x) ∧ (#x < #t)))) ∧
+   (∀ m #t.
+     (ServerSources( m ) @ #t) ⇒
+     (((∃ #x. ServerSource( m ) @ #x) ∨
+       (∃ ct1 ct2 #x1 #x2.
+         ((((m = <ct1, ct2>) ∧ (!KU( ct1 ) @ #x1)) ∧ (#x1 < #t)) ∧
+          (!KU( ct2 ) @ #x2)) ∧
+         (#x2 < #t))) ∨
+      (∃ #x. (!KU( m ) @ #x) ∧ (#x < #t))))"
+/*
+guarded formula characterizing all counter-examples:
+"((∃ m #t.
+    (ClientSources( m ) @ #t)
+   ∧
+    (∀ #x. (ClientSource( m ) @ #x) ⇒ ⊥) ∧
+    (∀ #x. (!KU( m ) @ #x) ⇒ ¬(#x < #t))) ∨
+  (∃ m #t.
+    (ServerSources( m ) @ #t)
+   ∧
+    (∀ #x. (ServerSource( m ) @ #x) ⇒ ⊥) ∧
+    (∀ ct1 ct2 #x1 #x2.
+      (m = <ct1, ct2>) ∧ (!KU( ct1 ) @ #x1) ∧ (!KU( ct2 ) @ #x2)
+     ⇒
+      ((¬(#x1 < #t)) ∨ (¬(#x2 < #t)))) ∧
+    (∀ #x. (!KU( m ) @ #x) ⇒ ¬(#x < #t))))"
+*/
+by sorry
+
+restriction Eq:
+  "∀ t1 t2 #x. (Eq( t1, t2 ) @ #x) ⇒ (t1 = t2)"
+  // safety formula
+
+restriction OnlyOnce:
+  "∀ x #i #j. ((OnlyOnce( x ) @ #i) ∧ (OnlyOnce( x ) @ #j)) ⇒ (#i = #j)"
+  // safety formula
+
+lemma Executability_Source_Submission:
+  exists-trace
+  "∃ #t1 #t2 id s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
+    ((SourceSubmission( id, s_fetching_pk, s_apke_pk, j_eapke_pk,
+                        j_fetching_pk, nr, m
+      ) @ #t1) ∧
+     (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetching_pk,
+                           s_apke_pk, m
+      ) @ #t2)) ∧
+    (¬(∃ #x. AdversaryActivity( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 id s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
+  (SourceSubmission( id, s_fetching_pk, s_apke_pk, j_eapke_pk,
+                     j_fetching_pk, nr, m
+   ) @ #t1) ∧
+  (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetching_pk,
+                        s_apke_pk, m
+   ) @ #t2)
+ ∧
+  ∀ #x. (AdversaryActivity( ) @ #x) ⇒ ⊥"
+*/
+by sorry
+
+lemma Executability_Journalist_Response:
+  exists-trace
+  "∃ #t1 #t2 id s_fetch_pk s_apke_pk j_apke_pk j_eapke_pk nr m.
+    ((JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                            s_fetch_pk, m
+      ) @ #t1) ∧
+     (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t2)) ∧
+    (¬(∃ #x. AdversaryActivity( ) @ #x))"
+/*
+guarded formula characterizing all satisfying traces:
+"∃ #t1 #t2 id s_fetch_pk s_apke_pk j_apke_pk j_eapke_pk nr m.
+  (JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                         s_fetch_pk, m
+   ) @ #t1) ∧
+  (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t2)
+ ∧
+  ∀ #x. (AdversaryActivity( ) @ #x) ⇒ ⊥"
+*/
+by sorry
+
+lemma Easy_SessionSecrecy [reuse]:
+  all-traces
+  "∀ sess #a #b. ((ClientSession( sess ) @ #a) ∧ (!KU( sess ) @ #b)) ⇒ (⊥)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ sess #a #b. (ClientSession( sess ) @ #a) ∧ (!KU( sess ) @ #b)"
+*/
+simplify
+solve( ClientSession( sess ) @ #a )
+  case Journalist_ChallengeResponse
+  solve( JournalistQueried( $J, $NR, ~sess ) ▶₀ #a )
+    case Journalist_Query
+    by solve( !KU( ~sess ) @ #b )
+  qed
+next
+  case Journalist_Query
+  by solve( !KU( ~sess ) @ #b )
+next
+  case Journalist_Recv
+  solve( JournalistResponded( $J, $NR, ~sess ) ▶₀ #a )
+    case Journalist_ChallengeResponse_case_1
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_2
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_3
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_4
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_5
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_6
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_7
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Journalist_ChallengeResponse_case_8
+    by solve( !KU( ~sess ) @ #b )
+  qed
+next
+  case Journalist_Send
+  by solve( !KU( ~sess ) @ #b )
+next
+  case Source_ChallengeResponse
+  solve( SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ) ▶₀ #a )
+    case Source_Query
+    by solve( !KU( ~sess ) @ #b )
+  qed
+next
+  case Source_Query
+  by solve( !KU( ~sess ) @ #b )
+next
+  case Source_Recv
+  solve( SourceResponded( $S, $NR, ~sess ) ▶₀ #a )
+    case Source_ChallengeResponse_case_1
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_2
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_3
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_4
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_5
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_6
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_7
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_8
+    by solve( !KU( ~sess ) @ #b )
+  qed
+next
+  case Source_Send
+  by solve( !KU( ~sess ) @ #b )
+qed
+
+lemma Easy_EphemeralDHSecrecy [reuse]:
+  all-traces
+  "∀ x #t1 #t2.
+    ((ClassicSecret( x ) @ #t1) ∧ (!KU( x ) @ #t2)) ⇒
+    (∃ #x.1. (PQAttack( ) @ #x.1) ∧ (#x.1 < #t2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ x #t1 #t2.
+  (ClassicSecret( x ) @ #t1) ∧ (!KU( x ) @ #t2)
+ ∧
+  ∀ #x.1. (PQAttack( ) @ #x.1) ⇒ ¬(#x.1 < #t2)"
+*/
+simplify
+solve( ClassicSecret( x ) @ #t1 )
+  case Journalist_Send
+  solve( !KU( ~x ) @ #t2 )
+    case PQAttacker_case_001
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_002
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_003
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_004
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_005
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_006
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_007
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_008
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_009
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_010
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_011
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_012
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_013
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_014
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_015
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_016
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_017
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_018
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_019
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_020
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_021
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_022
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_023
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_024
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_025
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_026
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_027
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_028
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_029
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_030
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_031
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_032
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_033
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_034
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_035
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_036
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_037
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_038
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_039
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_040
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_041
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_042
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_043
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_044
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_045
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_046
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_047
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_048
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_049
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_050
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_051
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_052
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_053
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_054
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_055
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_056
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_057
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_058
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_059
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_060
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_061
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_062
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_063
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_064
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_065
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_066
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_067
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_068
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_069
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_070
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_071
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_072
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_073
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_074
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_075
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_076
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_077
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_078
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_079
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_080
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_081
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_082
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_083
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_084
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_085
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_086
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_087
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_088
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_089
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_090
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_091
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_092
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_093
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_094
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_095
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_096
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_097
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_098
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_099
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_100
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_101
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_102
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_103
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_104
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_105
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_106
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_107
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_108
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_109
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_110
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_111
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_112
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_113
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_114
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_115
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_116
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_117
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_118
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_119
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_120
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_121
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_122
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_123
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_124
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_125
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_126
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_127
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_128
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_129
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_130
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_131
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_132
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_133
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_134
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_135
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_136
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_137
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_138
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_139
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_140
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_141
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_142
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_143
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_144
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_145
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_146
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_147
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_148
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_149
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_150
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_151
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_152
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_153
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_154
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_155
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_156
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_157
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_158
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_159
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_160
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_161
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_162
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_163
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_164
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_165
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_166
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_167
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_168
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_169
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_170
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_171
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_172
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_173
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_174
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_175
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_176
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_177
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_178
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_179
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_180
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_181
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_182
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_183
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_184
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_185
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_186
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_187
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_188
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_189
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_190
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_191
+    by contradiction /* from formulas */
+  next
+    case PQAttacker_case_192
+    by contradiction /* from formulas */
+  qed
+next
+  case ServerChallenge
+  by solve( !KU( ~r ) @ #t2 )
+next
+  case Source_Send
+  solve( !KU( ~x.2 ) @ #t2 )
+    case PQAttacker
+    by contradiction /* from formulas */
+  qed
+qed
+
+lemma Agreement_Source [reuse]:
+  all-traces
+  "∀ j_eapke_pk j_fetching_pk nr s_fetch_pk s_apke_pk m #t.
+    (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetch_pk,
+                          s_apke_pk, m
+     ) @ #t) ⇒
+    ((((∃ id #x.
+         (SourceSubmission( id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                            nr, m
+          ) @ #x) ∧
+         (#x < #t)) ∨
+       (¬(∃ #x. Source( s_apke_pk ) @ #x))) ∨
+      (∃ #x. (Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x) ∧ (#x < #t))) ∨
+     (∃ #x. (Reveal_Source_APKE( s_apke_pk ) @ #x) ∧ (#x < #t)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ j_eapke_pk j_fetching_pk nr s_fetch_pk s_apke_pk m #t.
+  (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetch_pk,
+                        s_apke_pk, m
+   ) @ #t)
+ ∧
+  (∀ id #x.
+    (SourceSubmission( id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                       nr, m
+     ) @ #x)
+   ⇒
+    ¬(#x < #t)) ∧
+  (∃ #x. (Source( s_apke_pk ) @ #x)) ∧
+  (∀ #x. (Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Source_APKE( s_apke_pk ) @ #x) ⇒ ¬(#x < #t))"
+*/
+by sorry
+
+lemma Agreement_Journalist [reuse]:
+  all-traces
+  "∀ j_apke_pk nr s_apke_pk s_fetch_pk m #t.
+    (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t) ⇒
+    (((((∃ id j_eapke_pk #x.
+          (JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                                 s_fetch_pk, m
+           ) @ #x) ∧
+          (#x < #t)) ∨
+        (∃ #x. (Reveal_Journalist_APKE( j_apke_pk ) @ #x) ∧ (#x < #t))) ∨
+       (∃ #x. (Reveal_Source_APKE( s_apke_pk ) @ #x) ∧ (#x < #t))) ∨
+      (∃ j_sig_pk #x.
+        (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ∧ (#x < #t))) ∨
+     (∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ j_apke_pk nr s_apke_pk s_fetch_pk m #t.
+  (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t)
+ ∧
+  (∀ id j_eapke_pk #x.
+    (JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                           s_fetch_pk, m
+     ) @ #x)
+   ⇒
+    ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Journalist_APKE( j_apke_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Source_APKE( s_apke_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ j_sig_pk #x.
+    (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t))"
+*/
+by sorry
+
+lemma Easy_SubmissionEquality [reuse]:
+  all-traces
+  "∀ id cts1 cts2 #t1 #t2.
+    ((IsSubmission( id, cts1 ) @ #t1) ∧ (Submit( id, cts2 ) @ #t2)) ⇒
+    (cts1 = cts2)"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id cts1 cts2 #t1 #t2.
+  (IsSubmission( id, cts1 ) @ #t1) ∧ (Submit( id, cts2 ) @ #t2)
+ ∧
+  ¬(cts1 = cts2)"
+*/
+simplify
+solve( IsSubmission( id, cts1 ) @ #t1 )
+  case ServerChallenge
+  solve( Submit( ~id, cts2 ) @ #t2 )
+    case AdversarySubmit
+    solve( !Submission( $NR, ~id, <ct1, ct2, z, z.1> ) ▶₁ #t1 )
+      case AdversarySubmit
+      by contradiction /* from formulas */
+    qed
+  next
+    case Journalist_Send
+    solve( !Submission( $NR, ~id, <ct1, ct2, z, z.1> ) ▶₁ #t1 )
+      case Journalist_Send_case_001
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_002
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_003
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_004
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_005
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_006
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_007
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_008
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_009
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_010
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_011
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_012
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_013
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_014
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_015
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_016
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_017
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_018
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_019
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_020
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_021
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_022
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_023
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_024
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_025
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_026
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_027
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_028
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_029
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_030
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_031
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_032
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_033
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_034
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_035
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_036
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_037
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_038
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_039
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_040
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_041
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_042
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_043
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_044
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_045
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_046
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_047
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_048
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_049
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_050
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_051
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_052
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_053
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_054
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_055
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_056
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_057
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_058
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_059
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_060
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_061
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_062
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_063
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_064
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_065
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_066
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_067
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_068
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_069
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_070
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_071
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_072
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_073
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_074
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_075
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_076
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_077
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_078
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_079
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_080
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_081
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_082
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_083
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_084
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_085
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_086
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_087
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_088
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_089
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_090
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_091
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_092
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_093
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_094
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_095
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_096
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_097
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_098
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_099
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_100
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_101
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_102
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_103
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_104
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_105
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_106
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_107
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_108
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_109
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_110
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_111
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_112
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_113
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_114
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_115
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_116
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_117
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_118
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_119
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_120
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_121
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_122
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_123
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_124
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_125
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_126
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_127
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_128
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_129
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_130
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_131
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_132
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_133
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_134
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_135
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_136
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_137
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_138
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_139
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_140
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_141
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_142
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_143
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_144
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_145
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_146
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_147
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_148
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_149
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_150
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_151
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_152
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_153
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_154
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_155
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_156
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_157
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_158
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_159
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_160
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_161
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_162
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_163
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_164
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_165
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_166
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_167
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_168
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_169
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_170
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_171
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_172
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_173
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_174
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_175
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_176
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_177
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_178
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_179
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_180
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_181
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_182
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_183
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_184
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_185
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_186
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_187
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_188
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_189
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_190
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_191
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_192
+      by contradiction /* from formulas */
+    qed
+  next
+    case Source_Send
+    solve( !Submission( $NR, ~id, <ct1, ct2, z, z.1> ) ▶₁ #t1 )
+      case Source_Send
+      by contradiction /* from formulas */
+    qed
+  qed
+next
+  case SubmissionAccess
+  solve( Submit( ~id, cts2 ) @ #t2 )
+    case AdversarySubmit
+    solve( !Submission( $NR, ~id, cts1 ) ▶₁ #t1 )
+      case AdversarySubmit
+      by contradiction /* from formulas */
+    qed
+  next
+    case Journalist_Send
+    solve( !Submission( $NR, ~id, cts1 ) ▶₁ #t1 )
+      case Journalist_Send_case_001
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_002
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_003
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_004
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_005
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_006
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_007
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_008
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_009
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_010
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_011
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_012
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_013
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_014
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_015
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_016
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_017
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_018
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_019
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_020
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_021
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_022
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_023
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_024
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_025
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_026
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_027
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_028
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_029
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_030
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_031
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_032
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_033
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_034
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_035
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_036
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_037
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_038
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_039
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_040
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_041
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_042
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_043
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_044
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_045
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_046
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_047
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_048
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_049
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_050
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_051
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_052
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_053
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_054
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_055
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_056
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_057
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_058
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_059
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_060
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_061
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_062
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_063
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_064
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_065
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_066
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_067
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_068
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_069
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_070
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_071
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_072
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_073
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_074
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_075
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_076
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_077
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_078
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_079
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_080
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_081
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_082
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_083
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_084
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_085
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_086
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_087
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_088
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_089
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_090
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_091
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_092
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_093
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_094
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_095
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_096
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_097
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_098
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_099
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_100
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_101
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_102
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_103
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_104
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_105
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_106
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_107
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_108
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_109
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_110
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_111
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_112
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_113
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_114
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_115
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_116
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_117
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_118
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_119
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_120
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_121
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_122
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_123
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_124
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_125
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_126
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_127
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_128
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_129
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_130
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_131
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_132
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_133
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_134
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_135
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_136
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_137
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_138
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_139
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_140
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_141
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_142
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_143
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_144
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_145
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_146
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_147
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_148
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_149
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_150
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_151
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_152
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_153
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_154
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_155
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_156
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_157
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_158
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_159
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_160
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_161
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_162
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_163
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_164
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_165
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_166
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_167
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_168
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_169
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_170
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_171
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_172
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_173
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_174
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_175
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_176
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_177
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_178
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_179
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_180
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_181
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_182
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_183
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_184
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_185
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_186
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_187
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_188
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_189
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_190
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_191
+      by contradiction /* from formulas */
+    next
+      case Journalist_Send_case_192
+      by contradiction /* from formulas */
+    qed
+  next
+    case Source_Send
+    solve( !Submission( $NR, ~id, cts1 ) ▶₁ #t1 )
+      case Source_Send
+      by contradiction /* from formulas */
+    qed
+  qed
+qed
+
+lemma Auto_FetchingSharedSecretSecrecySourceSubmission [reuse]:
+  all-traces
+  "∀ id nr ss chall j_fetch_pk #t1 #t2 #t3 #t4.
+    (((((FetchStart( id, nr, ss, chall ) @ #t1) ∧ (Fetched( id ) @ #t2)) ∧
+       (SourceSubmissionFor( id, j_fetch_pk ) @ #t3)) ∧
+      (!KU( ss ) @ #t4)) ∧
+     (#t4 < #t2)) ⇒
+    (((∃ #x. (Reveal_Journalist_Fetching( j_fetch_pk ) @ #x) ∧ (#x < #t2)) ∨
+      (∃ j_sig_pk #x.
+        (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ∧ (#x < #t3))) ∨
+     (∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t3)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id nr ss chall j_fetch_pk #t1 #t2 #t3 #t4.
+  (FetchStart( id, nr, ss, chall ) @ #t1) ∧
+  (Fetched( id ) @ #t2) ∧
+  (SourceSubmissionFor( id, j_fetch_pk ) @ #t3) ∧
+  (!KU( ss ) @ #t4)
+ ∧
+  (#t4 < #t2) ∧
+  (∀ #x. (Reveal_Journalist_Fetching( j_fetch_pk ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ j_sig_pk #x.
+    (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ⇒ ¬(#x < #t3)) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t3))"
+*/
+by sorry
+
+lemma Auto_FetchingSharedSecretSecrecyJournalistSubmission [reuse]:
+  all-traces
+  "∀ id nr ss chall s_fetch_pk #t1 #t2 #t3 #t4 #t5.
+    ((((((FetchStart( id, nr, ss, chall ) @ #t1) ∧ (Fetched( id ) @ #t2)) ∧
+        (JournalistSubmissionFor( id, s_fetch_pk ) @ #t3)) ∧
+       (SourceFetchPk( s_fetch_pk ) @ #t4)) ∧
+      (!KU( ss ) @ #t5)) ∧
+     (#t5 < #t2)) ⇒
+    (∃ #x. (Reveal_Source_Fetching( s_fetch_pk ) @ #x) ∧ (#x < #t2))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id nr ss chall s_fetch_pk #t1 #t2 #t3 #t4 #t5.
+  (FetchStart( id, nr, ss, chall ) @ #t1) ∧
+  (Fetched( id ) @ #t2) ∧
+  (JournalistSubmissionFor( id, s_fetch_pk ) @ #t3) ∧
+  (SourceFetchPk( s_fetch_pk ) @ #t4) ∧
+  (!KU( ss ) @ #t5)
+ ∧
+  (#t5 < #t2) ∧
+  (∀ #x. (Reveal_Source_Fetching( s_fetch_pk ) @ #x) ⇒ ¬(#x < #t2))"
+*/
+by sorry
+
+lemma Auto_FetchingChallengeSecrecy [reuse]:
+  all-traces
+  "∀ id nr ss chall #t1 #t2.
+    (((FetchStart( id, nr, ss, chall ) @ #t1) ∧ (Fetched( id ) @ #t2)) ∧
+     ((∃ j_fetch_pk #t2.1. SourceSubmissionFor( id, j_fetch_pk ) @ #t2.1) ∨
+      (∃ s_fetch_pk #t2.1 #t3.
+        (JournalistSubmissionFor( id, s_fetch_pk ) @ #t2.1) ∧
+        (SourceFetchPk( s_fetch_pk ) @ #t3)))) ⇒
+    ((((¬(∃ #x. !KU( chall ) @ #x)) ∨
+       (∃ #x. (!KU( ss ) @ #x) ∧ (#x < #t2))) ∨
+      (∃ #x. SecureDropInstanceCompromise( nr ) @ #x)) ∨
+     (∃ #x. SecureDropInstanceReadAccess( nr ) @ #x))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id nr ss chall #t1 #t2.
+  (FetchStart( id, nr, ss, chall ) @ #t1) ∧ (Fetched( id ) @ #t2)
+ ∧
+  (((∃ j_fetch_pk #t2.1. (SourceSubmissionFor( id, j_fetch_pk ) @ #t2.1)) ∨
+    (∃ s_fetch_pk #t2.1 #t3.
+      (JournalistSubmissionFor( id, s_fetch_pk ) @ #t2.1) ∧
+      (SourceFetchPk( s_fetch_pk ) @ #t3)))) ∧
+  (∃ #x. (!KU( chall ) @ #x)) ∧
+  (∀ #x. (!KU( ss ) @ #x) ⇒ ¬(#x < #t2)) ∧
+  (∀ #x. (SecureDropInstanceCompromise( nr ) @ #x) ⇒ ⊥) ∧
+  (∀ #x. (SecureDropInstanceReadAccess( nr ) @ #x) ⇒ ⊥)"
+*/
+by sorry
+
+lemma Secrecy_SourceSubmission:
+  all-traces
+  "∀ id s_fetch_pk s_apke_pk j_eapke_pk nr m j_fetching_pk #t.
+    (SourceSubmission( id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                       nr, m
+     ) @ #t) ⇒
+    ((((¬(∃ #x. K( m ) @ #x)) ∨
+       (∃ #x. (Reveal_Newsroom_Key( nr ) @ #x) ∧ (#x < #t))) ∨
+      (∃ j_sig_pk #x.
+        (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ∧ (#x < #t))) ∨
+     ((((∃ #x #y.
+          ((Fetched( id ) @ #x) ∧
+           (Reveal_Journalist_Fetching( j_fetching_pk ) @ #y)) ∧
+          (#y < #x)) ∨
+        (∃ #x. SecureDropInstanceReadAccess( nr ) @ #x)) ∨
+       (∃ #x. SecureDropInstanceCompromise( nr ) @ #x)) ∧
+      (∃ #x. Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id s_fetch_pk s_apke_pk j_eapke_pk nr m j_fetching_pk #t.
+  (SourceSubmission( id, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                     nr, m
+   ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∀ #x. (Reveal_Newsroom_Key( nr ) @ #x) ⇒ ¬(#x < #t)) ∧
+  (∀ j_sig_pk #x.
+    (Reveal_Journalist_SIG_Key( nr, j_sig_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+  ((((∀ #x #y.
+       (Fetched( id ) @ #x) ∧ (Reveal_Journalist_Fetching( j_fetching_pk ) @ #y)
+      ⇒
+       ¬(#y < #x)) ∧
+     (∀ #x. (SecureDropInstanceReadAccess( nr ) @ #x) ⇒ ⊥) ∧
+     (∀ #x. (SecureDropInstanceCompromise( nr ) @ #x) ⇒ ⊥)) ∨
+    (∀ #x. (Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x) ⇒ ⊥)))"
+*/
+by sorry
+
+lemma Secrecy_JournalistSubmission:
+  all-traces
+  "∀ id j_apke_pk j_eapke_pk nr s_fetching_pk s_apke_pk m #t.
+    (JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                           s_fetching_pk, m
+     ) @ #t) ⇒
+    (((¬(∃ #x. K( m ) @ #x)) ∨ (¬(∃ #x. Source( s_apke_pk ) @ #x))) ∨
+     (((((∃ #x #y.
+           ((Fetched( id ) @ #x) ∧ (Reveal_Source_Fetching( s_fetching_pk ) @ #y)) ∧
+           (#y < #x)) ∨
+         (∃ #x. (Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x) ∧ (#x < #t))) ∨
+        (∃ #x. SecureDropInstanceReadAccess( nr ) @ #x)) ∨
+       (∃ #x. SecureDropInstanceCompromise( nr ) @ #x)) ∧
+      (∃ #x. Reveal_Source_APKE( s_apke_pk ) @ #x)))"
+/*
+guarded formula characterizing all counter-examples:
+"∃ id j_apke_pk j_eapke_pk nr s_fetching_pk s_apke_pk m #t.
+  (JournalistSubmission( id, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                         s_fetching_pk, m
+   ) @ #t)
+ ∧
+  (∃ #x. (K( m ) @ #x)) ∧
+  (∃ #x. (Source( s_apke_pk ) @ #x)) ∧
+  ((((∀ #x #y.
+       (Fetched( id ) @ #x) ∧ (Reveal_Source_Fetching( s_fetching_pk ) @ #y)
+      ⇒
+       ¬(#y < #x)) ∧
+     (∀ #x. (Reveal_Journalist_EAPKE( j_eapke_pk ) @ #x) ⇒ ¬(#x < #t)) ∧
+     (∀ #x. (SecureDropInstanceReadAccess( nr ) @ #x) ⇒ ⊥) ∧
+     (∀ #x. (SecureDropInstanceCompromise( nr ) @ #x) ⇒ ⊥)) ∨
+    (∀ #x. (Reveal_Source_APKE( s_apke_pk ) @ #x) ⇒ ⊥)))"
+*/
+by sorry
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* All wellformedness checks were successful. */
+
+/*
+Generated from:
+Tamarin version 1.11.0
+Maude version 3.5
+Git revision: 60154410af80bc7664662a63f5dfcffb12f98903, branch: cli-oracle-quit
+Compiled at: 2025-11-07 16:07:16.928254149 UTC
+*/
+
+end
