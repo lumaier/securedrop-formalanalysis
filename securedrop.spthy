@@ -60,13 +60,13 @@ rule Register_Source_Passphrase[color=#ffee00]:
     , Source(pk(~s_apke_sk))
     , SourceFetchPk(s_fetching_pk)
     , PrePQAttack() ]->
-  [ !LongTerm_Source_Key($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !NonPQSecKey(~s_fetching_sk)
   , !NonPQSecKey(~s_pke_sk)
   , Out(<s_fetching_pk, s_pke_pk, s_apke_pk>) ]
 
 rule Reveal_Source_Fetching[color=#ff6961]:
-  [ !LongTerm_Source_Key($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
   --[ Reveal_Source_Fetching('g'^~s_fetching_sk)
     , AdversaryActivity() ]->
   [ Out(~s_fetching_sk) ]
@@ -74,7 +74,7 @@ rule Reveal_Source_Fetching[color=#ff6961]:
 rule Reveal_Source_PKE[color=#ff6961]:
   let s_pke_pk = pk(~s_pke_sk)
   in
-  [ !LongTerm_Source_Key($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
   --[ Reveal_Source_PKE(s_pke_pk)
     , AdversaryActivity() ]->
   [ Out(~s_pke_sk) ]
@@ -82,7 +82,7 @@ rule Reveal_Source_PKE[color=#ff6961]:
 rule Reveal_Source_APKE[color=#ff6961]:
   let s_apke_pk = pk(~s_apke_sk)
   in
-  [ !LongTerm_Source_Key($A, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk) ]
   --[ Reveal_Source_APKE(s_apke_pk)
     , AdversaryActivity() ]->
   [ Out(~s_apke_sk) ]
@@ -224,7 +224,7 @@ rule Source_Send[color=#58a820,no_derivcheck]:
       ct4 = 'g'^~x
       cts = <ct1, ct2, ct3, ct4>
   in
-  [ !LongTerm_Source_Key($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Public_Newsroom_Key($NR, nr_pk)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, j_epke_pk, j_eapke_pk, sig_j_sig_pk, sig_j_ltk, sig_j_eph>)
   , Fr(~sess), Fr(~x), Fr(~msg), Fr(~id) ]
@@ -251,7 +251,7 @@ rule Source_Send[color=#58a820,no_derivcheck]:
 
 // Receiving
 rule Source_Query[color=#58a820]:
-  [ !LongTerm_Source_Key($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
+  [ !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Public_Newsroom_Key($NR, nr_pk)
   , Fr(~sess) ]
   --[ ClientSource('request')
@@ -279,7 +279,7 @@ rule Source_Recv[color=#58a820]:
   , Client_In(~sess, $NR, <ct1, ct2>)
   , In(<j_sig_pk, j_fetching_pk, j_apke_pk, sig_j_sig_pk, sig_j_ltk>)
   , !APKE_MessageSpace(pt1), !PKE_MessageSpace(pt2)
-  , !LongTerm_Source_Key($S, ~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
+  , !LongTerm_Source_Key(~s_fetching_sk, ~s_pke_sk, ~s_apke_sk)
   , !Public_Newsroom_Key($NR, nr_pk) ]
   --[ APKE_Dec(ct1, j_apke_pk, ~s_apke_sk, $NR, 'g'^~s_fetching_sk, pt1)
     , PKE_Dec(ct2, ~s_pke_sk, pt2)
