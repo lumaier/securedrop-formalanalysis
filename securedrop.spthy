@@ -113,18 +113,18 @@ lemma Easy_SourcePassphraseSecrecy[reuse]:
     ==> (Ex s #x. Reveal_Source_Passphrase(s, p) @ #x & #x < #t2)"
 
 lemma Easy_SourceFetchingKeySecrecy[reuse]:
-  "All p pc #t1 #t2. IsSourceFetchingKey(kdf(<'fetch', p>), pc) @ #t1 & !KU(k) @ #t2
+  "All sc pc #t1 #t2. IsSourceFetchingKey(sc, pc) @ #t1 & !KU(sc) @ #t2
     ==>   (Ex #x. Reveal_Source_Fetching(pc) @ #x & #x < #t2)
         | (Ex #x. PQAttack() @ #x & #x < #t2)"
 
 lemma Easy_SourcePKEKeySecrecy[reuse]:
-  "All p #t1 #t2. IsSourcePKEKey(kdf(<'pke', p>)) @ #t1 & !KU(kdf(<'pke', p>)) @ #t2
-    ==>   (Ex #x. Reveal_Source_PKE(kdf(<'pke', p>)) @ #x & #x < #t2)
+  "All pke_pk #t1 #t2. IsSourcePKEKey(pke_pk) @ #t1 & !KU(pke_pk) @ #t2
+    ==>   (Ex #x. Reveal_Source_PKE(pk(pke_pk)) @ #x & #x < #t2)
         | (Ex #x. PQAttack() @ #x & #x < #t2)"
 
 lemma Easy_SourceAPKEKeySecrecy[reuse]:
-  "All p #t1 #t2. IsSourceAPKEKey(kdf(<'apke', p>)) @ #t1 & !KU(kdf(<'apke', p>)) @ #t2
-    ==> (Ex #x. Reveal_Source_APKE(pk(kdf(<'apke', p>))) @ #x & #x < #t2)"
+  "All apke_sk #t1 #t2. IsSourceAPKEKey(apke_sk) @ #t1 & !KU(apke_sk) @ #t2
+    ==> (Ex #x. Reveal_Source_APKE(pk(apke_sk)) @ #x & #x < #t2)"
 
 // Journalist Enrollment
 
