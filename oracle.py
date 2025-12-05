@@ -58,16 +58,18 @@ elif argv[1] == 'Auto_FetchingSharedSecretSecrecyJournalistSubmission':
   match = matchAgainstList([
     re_illegal_submission,
     re.compile(r'∃.+Reveal'),
-    '!KU( \'g\'^(~r*~s_fetching_sk*~x) ) @ #t5',
+    '!KU( \'g\'^(~r*~x*kdf(<\'fetch\', ~passphrase>)) ) @ #t5',
     'splitEqs(4)',
   ], lines)
 elif argv[1] == 'Auto_FetchingChallengeSecrecy':
   match = matchAgainstList([
+    re_illegal_submission,
     '∃',
     'senc(~chall,',
     re.compile(r'Client_Out\(.+~chall'),
     re.compile(r'!Submission.+ ▶. #t1'),
     '!KU( ~chall',
+    '!KU( kdf(<$NR, \'g\'^(~r*',
   ], lines)
 elif argv[1] == 'Secrecy_SourceSubmission':
   match = matchAgainstList([
