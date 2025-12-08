@@ -287,9 +287,9 @@ rule Source_Query[color=#58a820]:
 
 rule Source_ChallengeResponse[color=#58a820,no_derivcheck]:
   let challenge_pc = 'g'^k
-      challenge_key = kdf(<$NR, challenge_pc^~s_fetching_sk>)
+      challenge_key = kdf(<$NR, challenge_pc^s_fetching_sk>)
   in
-  [ SourceQueried($S, $NR, ~sess, ~s_fetching_sk)
+  [ SourceQueried($S, $NR, ~sess, s_fetching_sk)
   , Client_In(~sess, $NR, <challenge_pc, senc(id, challenge_key)>) ]
   --[ PrePQAttack()
     , ClientSession(~sess) ]->
