@@ -611,8 +611,8 @@ rule (modulo E) Source_Send[color=#58a820, no_derivcheck]:
                           <'submission', 'g'^s_fetching_sk, pk(s_pke_sk), ~msg>, $NR, 'g'^k), 
                  PKE_Enc(j_epke_pk, <'pk', pk(s_apke_sk)>)>
   ),
-  ClientSession( ~sess ), SourceSubmissionFor( ~id, 'g'^k ),
-  ClassicSecret( ~x ),
+  ClientSession( ~sess ), SourceSession( ~sess ),
+  SourceSubmissionFor( ~id, 'g'^k ), ClassicSecret( ~x ),
   Submit( ~id,
           <
            APKE_Enc(s_apke_sk, j_eapke_pk,
@@ -657,8 +657,8 @@ rule (modulo E) Source_Send[color=#58a820, no_derivcheck]:
                             $NR, z), 
                    PKE_Enc(j_epke_pk, <'pk', pk(s_apke_sk)>)>
     ),
-    ClientSession( ~sess ), SourceSubmissionFor( ~id, z ),
-    ClassicSecret( ~x ),
+    ClientSession( ~sess ), SourceSession( ~sess ),
+    SourceSubmissionFor( ~id, z ), ClassicSecret( ~x ),
     Submit( ~id,
             <
              APKE_Enc(s_apke_sk, j_eapke_pk, <'submission', z.1, pk(s_pke_sk), ~msg>,
@@ -1517,7 +1517,10 @@ rule (modulo E) Source_Query[color=#58a820]:
    !LongTerm_Source_Key( s_fetching_sk, s_pke_sk, s_apke_sk ),
    !Public_Newsroom_Key( $NR, nr_pk ), Fr( ~sess )
    ]
-  --[ ClientSource( 'request' ), PrePQAttack( ), ClientSession( ~sess ) ]->
+  --[
+  ClientSource( 'request' ), PrePQAttack( ), ClientSession( ~sess ),
+  SourceSession( ~sess )
+  ]->
    [
    Client_Out( ~sess, $NR, 'request' ),
    SourceQueried( $S, $NR, ~sess, s_fetching_sk )
@@ -1527,52 +1530,261 @@ rule (modulo E) Source_Query[color=#58a820]:
 
 rule (modulo E) Source_ChallengeResponse[color=#58a820, no_derivcheck]:
    [
-   SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ),
-   Client_In( ~sess, $NR,
-              <'g'^k, senc(id, kdf(<$NR, 'g'^k^~s_fetching_sk>))>
+   SourceQueried( $S, $NR, ~sess, s_fetching_sk ),
+   Client_In( ~sess, $NR, <'g'^k, senc(id, kdf(<$NR, 'g'^k^s_fetching_sk>))>
    )
    ]
-  --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+  --[ PrePQAttack( ), ClientSession( ~sess ), SourceSession( ~sess ) ]->
    [ Client_Out( ~sess, $NR, id ), SourceResponded( $S, $NR, ~sess ) ]
 
   /*
   rule (modulo AC) Source_ChallengeResponse[color=#58a820, no_derivcheck]:
      [
-     SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ),
+     SourceQueried( $S, $NR, ~sess, s_fetching_sk ),
      Client_In( ~sess, $NR, <z, senc(id, kdf(<$NR, z.1>))> )
      ]
-    --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+    --[ PrePQAttack( ), ClientSession( ~sess ), SourceSession( ~sess ) ]->
      [ Client_Out( ~sess, $NR, id ), SourceResponded( $S, $NR, ~sess ) ]
     variants (modulo AC)
-    1. ~s_fetching_sk
-             = ~s_fetching_sk.9
-       z     = 'g'
-       z.1   = 'g'^~s_fetching_sk.9
+     1. s_fetching_sk
+              = s_fetching_sk.9
+        z     = 'g'
+        z.1   = 'g'^s_fetching_sk.9
     
-    2. ~s_fetching_sk
-             = ~s_fetching_sk.9
-       z     = 'g'^k.9
-       z.1   = 'g'^(~s_fetching_sk.9*k.9)
+     2. s_fetching_sk
+              = s_fetching_sk.9
+        z     = 'g'^k.9
+        z.1   = 'g'^(k.9*s_fetching_sk.9)
     
-    3. ~s_fetching_sk
-             = ~x.9
-       z     = 'g'^inv(~x.9)
-       z.1   = 'g'
+     3. s_fetching_sk
+              = x.9
+        z     = 'g'^inv(x.9)
+        z.1   = 'g'
     
-    4. ~s_fetching_sk
-             = ~x.9
-       z     = 'g'^inv((~x.9*x.12))
-       z.1   = 'g'^inv(x.12)
+     4. s_fetching_sk
+              = x.10
+        z     = 'g'^inv((x.9*x.10))
+        z.1   = 'g'^inv(x.9)
     
-    5. ~s_fetching_sk
-             = ~x.9
-       z     = 'g'^(x.12*inv(~x.9))
-       z.1   = 'g'^x.12
+     5. s_fetching_sk
+              = x.10
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^x.9
     
-    6. ~s_fetching_sk
-             = ~x.9
-       z     = 'g'^(x.12*inv((~x.9*x.13)))
-       z.1   = 'g'^(x.12*inv(x.13))
+     6. s_fetching_sk
+              = x.11
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.9*inv(x.10))
+    
+     7. s_fetching_sk
+              = inv(x.9)
+        z     = 'g'^x.9
+        z.1   = 'g'
+    
+     8. s_fetching_sk
+              = inv(x.9)
+        z     = 'g'^(x.9*x.10)
+        z.1   = 'g'^x.10
+    
+     9. s_fetching_sk
+              = inv(x.10)
+        z     = 'g'^inv(x.9)
+        z.1   = 'g'^inv((x.9*x.10))
+    
+    10. s_fetching_sk
+              = inv(x.11)
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^(x.9*inv((x.10*x.11)))
+    
+    11. s_fetching_sk
+              = inv((x.9*x.10))
+        z     = 'g'^x.9
+        z.1   = 'g'^inv(x.10)
+    
+    12. s_fetching_sk
+              = inv((x.9*x.11))
+        z     = 'g'^(x.9*x.10)
+        z.1   = 'g'^(x.10*inv(x.11))
+    
+    13. s_fetching_sk
+              = inv((x.9*x.11))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^inv((x.10*x.11))
+    
+    14. s_fetching_sk
+              = inv((x.10*x.12))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^(x.9*inv((x.11*x.12)))
+    
+    15. s_fetching_sk
+              = one
+        z     = 'g'
+        z.1   = 'g'
+    
+    16. s_fetching_sk
+              = one
+        z     = 'g'^k.9
+        z.1   = 'g'^k.9
+    
+    17. s_fetching_sk
+              = (x.9*x.10)
+        z     = 'g'^inv(x.9)
+        z.1   = 'g'^x.10
+    
+    18. s_fetching_sk
+              = (x.9*x.11)
+        z     = 'g'^inv((x.9*x.10))
+        z.1   = 'g'^(x.11*inv(x.10))
+    
+    19. s_fetching_sk
+              = (x.9*x.11*inv(x.12))
+        z     = 'g'^inv((x.9*x.10))
+        z.1   = 'g'^(x.11*inv((x.10*x.12)))
+    
+    20. s_fetching_sk
+              = (x.9*inv(x.11))
+        z     = 'g'^inv((x.9*x.10))
+        z.1   = 'g'^inv((x.10*x.11))
+    
+    21. s_fetching_sk
+              = (x.10*x.11)
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^(x.9*x.11)
+    
+    22. s_fetching_sk
+              = (x.10*x.11*inv(x.9))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^x.11
+    
+    23. s_fetching_sk
+              = (x.10*x.11*inv((x.9*x.12)))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^(x.11*inv(x.12))
+    
+    24. s_fetching_sk
+              = (x.10*x.12)
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.9*x.12*inv(x.11))
+    
+    25. s_fetching_sk
+              = (x.10*x.12*inv(x.9))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.12*inv(x.11))
+    
+    26. s_fetching_sk
+              = (x.10*x.12*inv(x.13))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.9*x.12*inv((x.11*x.13)))
+    
+    27. s_fetching_sk
+              = (x.10*x.12*inv((x.9*x.13)))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.12*inv((x.11*x.13)))
+    
+    28. s_fetching_sk
+              = (x.10*inv(x.9))
+        z     = 'g'^x.9
+        z.1   = 'g'^x.10
+    
+    29. s_fetching_sk
+              = (x.10*inv(x.9))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'
+    
+    30. s_fetching_sk
+              = (x.10*inv(x.11))
+        z     = 'g'^inv(x.9)
+        z.1   = 'g'^(x.10*inv((x.9*x.11)))
+    
+    31. s_fetching_sk
+              = (x.10*inv(x.12))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^(x.9*inv((x.11*x.12)))
+    
+    32. s_fetching_sk
+              = (x.10*inv((x.9*x.11)))
+        z     = 'g'^x.9
+        z.1   = 'g'^(x.10*inv(x.11))
+    
+    33. s_fetching_sk
+              = (x.10*inv((x.9*x.11)))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^inv(x.11)
+    
+    34. s_fetching_sk
+              = (x.10*inv((x.9*x.12)))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^inv((x.11*x.12))
+    
+    35. s_fetching_sk
+              = (x.11*x.12*inv(x.9))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^(x.10*x.12)
+    
+    36. s_fetching_sk
+              = (x.11*x.12*inv((x.9*x.13)))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^(x.10*x.12*inv(x.13))
+    
+    37. s_fetching_sk
+              = (x.11*x.13*inv(x.9))
+        z     = 'g'^(x.9*x.10*inv((x.11*x.12)))
+        z.1   = 'g'^(x.10*x.13*inv(x.12))
+    
+    38. s_fetching_sk
+              = (x.11*x.13*inv((x.9*x.14)))
+        z     = 'g'^(x.9*x.10*inv((x.11*x.12)))
+        z.1   = 'g'^(x.10*x.13*inv((x.12*x.14)))
+    
+    39. s_fetching_sk
+              = (x.11*inv(x.9))
+        z     = 'g'^(x.9*x.10)
+        z.1   = 'g'^(x.10*x.11)
+    
+    40. s_fetching_sk
+              = (x.11*inv(x.9))
+        z     = 'g'^(x.9*inv((x.10*x.11)))
+        z.1   = 'g'^inv(x.10)
+    
+    41. s_fetching_sk
+              = (x.11*inv(x.10))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^x.9
+    
+    42. s_fetching_sk
+              = (x.11*inv(x.12))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^(x.9*x.11*inv((x.10*x.12)))
+    
+    43. s_fetching_sk
+              = (x.11*inv((x.9*x.12)))
+        z     = 'g'^(x.9*x.10)
+        z.1   = 'g'^(x.10*x.11*inv(x.12))
+    
+    44. s_fetching_sk
+              = (x.11*inv((x.9*x.12)))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^(x.10*inv(x.12))
+    
+    45. s_fetching_sk
+              = (x.11*inv((x.9*x.12)))
+        z     = 'g'^(x.9*inv(x.10))
+        z.1   = 'g'^(x.11*inv((x.10*x.12)))
+    
+    46. s_fetching_sk
+              = (x.11*inv((x.9*x.13)))
+        z     = 'g'^(x.9*x.10*inv((x.11*x.12)))
+        z.1   = 'g'^(x.10*inv((x.12*x.13)))
+    
+    47. s_fetching_sk
+              = (x.12*inv(x.10))
+        z     = 'g'^(x.9*x.10*inv((x.11*x.12)))
+        z.1   = 'g'^(x.9*inv(x.11))
+    
+    48. s_fetching_sk
+              = (x.12*inv((x.9*x.13)))
+        z     = 'g'^(x.9*x.10*inv(x.11))
+        z.1   = 'g'^(x.10*x.12*inv((x.11*x.13)))
   */
 
 rule (modulo E) Source_Recv[color=#58a820]:
@@ -1594,7 +1806,7 @@ rule (modulo E) Source_Recv[color=#58a820]:
       true
   ),
   Source_Received( pk(s_apke_sk), 'g'^s_fetching_sk, j_apke_pk, $NR, m ),
-  PrePQAttack( ), ClientSession( ~sess )
+  PrePQAttack( ), ClientSession( ~sess ), SourceSession( ~sess )
   ]->
    [ ]
 
@@ -1612,7 +1824,7 @@ rule (modulo E) Source_Recv[color=#58a820]:
     APKE_Dec( ct1, j_apke_pk, s_apke_sk, $NR, z, <'submission', m> ),
     PKE_Dec( ct2, s_pke_sk, <'pk', j_apke_pk> ), Eq( z.1, true ),
     Eq( z.2, true ), Source_Received( pk(s_apke_sk), z, j_apke_pk, $NR, m ),
-    PrePQAttack( ), ClientSession( ~sess )
+    PrePQAttack( ), ClientSession( ~sess ), SourceSession( ~sess )
     ]->
      [ ]
     variants (modulo AC)
@@ -1759,7 +1971,10 @@ rule (modulo E) Source_Recv[color=#58a820]:
 
 rule (modulo E) Journalist_Query[color=#0a0aff]:
    [ !Journalist_Enrolled( $NR, $J ), Fr( ~sess ) ]
-  --[ ClientSource( 'request' ), ClientSession( ~sess ), PrePQAttack( ) ]->
+  --[
+  ClientSource( 'request' ), ClientSession( ~sess ),
+  JournalistQuery( ~sess ), JournalistSession( ~sess ), PrePQAttack( )
+  ]->
    [
    Client_Out( ~sess, $NR, 'request' ), JournalistQueried( $J, $NR, ~sess )
    ]
@@ -1775,7 +1990,8 @@ rule (modulo E) Journalist_ChallengeResponse[color=#0a0aff,
               <'g'^k, senc(id, kdf(<$NR, 'g'^k^~j_fetching_sk>))>
    )
    ]
-  --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+  --[ PrePQAttack( ), ClientSession( ~sess ), JournalistSession( ~sess )
+  ]->
    [ Client_Out( ~sess, $NR, id ), JournalistResponded( $J, $NR, ~sess ) ]
 
   /*
@@ -1786,7 +2002,8 @@ rule (modulo E) Journalist_ChallengeResponse[color=#0a0aff,
      !LongTerm_Journalist_FETCHING_Key( $J, ~j_fetching_sk ),
      Client_In( ~sess, $NR, <z, senc(id, kdf(<$NR, z.1>))> )
      ]
-    --[ PrePQAttack( ), ClientSession( ~sess ) ]->
+    --[ PrePQAttack( ), ClientSession( ~sess ), JournalistSession( ~sess )
+    ]->
      [ Client_Out( ~sess, $NR, id ), JournalistResponded( $J, $NR, ~sess ) ]
     variants (modulo AC)
     1. ~j_fetching_sk
@@ -1838,7 +2055,7 @@ rule (modulo E) Journalist_Recv[color=#0a0aff, no_derivcheck]:
   Journalist_Received( pk(~j_eapke_sk), 'g'^~j_fetching_sk, $NR, 'g'^k,
                        s_apke_pk, m
   ),
-  ClientSession( ~sess ), PrePQAttack( )
+  ClientSession( ~sess ), JournalistSession( ~sess ), PrePQAttack( )
   ]->
    [ Journalist_Recv( $J, pk(~j_eapke_sk), 'g'^k, s_pke_pk, s_apke_pk ) ]
 
@@ -1862,7 +2079,7 @@ rule (modulo E) Journalist_Recv[color=#0a0aff, no_derivcheck]:
     Journalist_Received( pk(~j_eapke_sk), 'g'^~j_fetching_sk, $NR, z,
                          s_apke_pk, m
     ),
-    ClientSession( ~sess ), PrePQAttack( )
+    ClientSession( ~sess ), JournalistSession( ~sess ), PrePQAttack( )
     ]->
      [ Journalist_Recv( $J, pk(~j_eapke_sk), z, s_pke_pk, s_apke_pk ) ]
     variants (modulo AC)
@@ -1895,8 +2112,8 @@ rule (modulo E) Journalist_Send[color=#0a0aff]:
   JournalistSubmission( ~id, pk(~j_apke_sk), j_eapke_pk, $NR, s_apke_pk,
                         s_fetching_pk, ~msg
   ),
-  ClientSession( ~sess ), JournalistSubmissionFor( ~id, s_fetching_pk ),
-  ClassicSecret( ~x ),
+  ClientSession( ~sess ), JournalistSession( ~sess ),
+  JournalistSubmissionFor( ~id, s_fetching_pk ), ClassicSecret( ~x ),
   Submit( ~id,
           <
            APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
@@ -1940,8 +2157,8 @@ rule (modulo E) Journalist_Send[color=#0a0aff]:
     JournalistSubmission( ~id, pk(~j_apke_sk), j_eapke_pk, $NR, s_apke_pk,
                           s_fetching_pk, ~msg
     ),
-    ClientSession( ~sess ), JournalistSubmissionFor( ~id, s_fetching_pk ),
-    ClassicSecret( ~x ),
+    ClientSession( ~sess ), JournalistSession( ~sess ),
+    JournalistSubmissionFor( ~id, s_fetching_pk ), ClassicSecret( ~x ),
     Submit( ~id,
             <
              APKE_Enc(~j_apke_sk, s_apke_pk, <'submission', ~msg>, $NR,
@@ -2732,35 +2949,44 @@ restriction OnlyOnce:
   "∀ x #i #j. ((OnlyOnce( x ) @ #i) ∧ (OnlyOnce( x ) @ #j)) ⇒ (#i = #j)"
   // safety formula
 
-lemma Executability_Source_Submission:
+lemma Executability:
   exists-trace
-  "∃ #t s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
-    (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetching_pk,
-                          s_apke_pk, m
-     ) @ #t) ∧
+  "∃ #t1 #t2 #t3 #t4 s_fetch_pk s_apke_pk j_apke_pk nr srs m1 sid
+     j_eapke_pk j_fetching_pk m2 sss jrs jid s_fetching_pk jss.
+    (((((((((Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m1
+             ) @ #t1) ∧
+            (SourceSession( srs ) @ #t1)) ∧
+           (SourceSubmission( sid, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                              nr, m2
+            ) @ #t2)) ∧
+          (SourceSession( sss ) @ #t2)) ∧
+         (JournalistQuery( jrs ) @ #t3)) ∧
+        (JournalistSubmission( jid, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                               s_fetching_pk, m1
+         ) @ #t4)) ∧
+       (JournalistSession( jss ) @ #t4)) ∧
+      (∀ s #x. (JournalistSession( s ) @ #x) ⇒ ((s = jrs) ∨ (s = jss)))) ∧
+     (∀ s #x. (SourceSession( s ) @ #x) ⇒ ((s = srs) ∨ (s = sss)))) ∧
     (¬(∃ #x. AdversaryActivity( ) @ #x))"
 /*
 guarded formula characterizing all satisfying traces:
-"∃ #t s_fetching_pk s_apke_pk j_eapke_pk j_fetching_pk nr m.
-  (Journalist_Received( j_eapke_pk, j_fetching_pk, nr, s_fetching_pk,
-                        s_apke_pk, m
-   ) @ #t)
+"∃ #t1 #t2 #t3 #t4 s_fetch_pk s_apke_pk j_apke_pk nr srs m1 sid
+   j_eapke_pk j_fetching_pk m2 sss jrs jid s_fetching_pk jss.
+  (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m1 ) @ #t1) ∧
+  (SourceSession( srs ) @ #t1) ∧
+  (SourceSubmission( sid, s_fetch_pk, s_apke_pk, j_eapke_pk, j_fetching_pk,
+                     nr, m2
+   ) @ #t2) ∧
+  (SourceSession( sss ) @ #t2) ∧
+  (JournalistQuery( jrs ) @ #t3) ∧
+  (JournalistSubmission( jid, j_apke_pk, j_eapke_pk, nr, s_apke_pk,
+                         s_fetching_pk, m1
+   ) @ #t4) ∧
+  (JournalistSession( jss ) @ #t4)
  ∧
-  ∀ #x. (AdversaryActivity( ) @ #x) ⇒ ⊥"
-*/
-by sorry
-
-lemma Executability_Journalist_Response:
-  exists-trace
-  "∃ #t s_fetch_pk s_apke_pk j_apke_pk nr m.
-    (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t) ∧
-    (¬(∃ #x. AdversaryActivity( ) @ #x))"
-/*
-guarded formula characterizing all satisfying traces:
-"∃ #t s_fetch_pk s_apke_pk j_apke_pk nr m.
-  (Source_Received( s_apke_pk, s_fetch_pk, j_apke_pk, nr, m ) @ #t)
- ∧
-  ∀ #x. (AdversaryActivity( ) @ #x) ⇒ ⊥"
+  (∀ s #x. (JournalistSession( s ) @ #x) ⇒ ((s = jrs) ∨ (s = jss))) ∧
+  (∀ s #x. (SourceSession( s ) @ #x) ⇒ ((s = srs) ∨ (s = sss))) ∧
+  (∀ #x. (AdversaryActivity( ) @ #x) ⇒ ⊥)"
 */
 by sorry
 
@@ -2813,13 +3039,40 @@ next
   by solve( !KU( ~sess ) @ #b )
 next
   case Source_ChallengeResponse
-  by solve( SourceQueried( $S, $NR, ~sess, ~s_fetching_sk ) ▶₀ #a )
+  solve( SourceQueried( $S, $NR, ~sess, s_fetching_sk ) ▶₀ #a )
+    case Source_Query
+    by solve( !KU( ~sess ) @ #b )
+  qed
 next
   case Source_Query
   by solve( !KU( ~sess ) @ #b )
 next
   case Source_Recv
-  by solve( SourceResponded( $S, $NR, ~sess ) ▶₀ #a )
+  solve( SourceResponded( $S, $NR, ~sess ) ▶₀ #a )
+    case Source_ChallengeResponse_case_1
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_2
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_3
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_4
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_5
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_6
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_7
+    by solve( !KU( ~sess ) @ #b )
+  next
+    case Source_ChallengeResponse_case_8
+    by solve( !KU( ~sess ) @ #b )
+  qed
 next
   case Source_Send
   by solve( !KU( ~sess ) @ #b )
@@ -4892,8 +5145,8 @@ by sorry
 Generated from:
 Tamarin version 1.11.0
 Maude version 3.5
-Git revision: b93c7a33fed67a713a90039fce0c4d94def23bd0, branch: HEAD
-Compiled at: 2025-09-19 11:18:23.495617078 UTC
+Git revision: 60154410af80bc7664662a63f5dfcffb12f98903, branch: cli-oracle-quit
+Compiled at: 2025-11-07 16:07:16.928254149 UTC
 */
 
 end
