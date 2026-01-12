@@ -1,6 +1,20 @@
-TAMARIN_RELEASE ?= tamarin-prover
+TOOLS_DIR := $(CURDIR)/tools
+TAMARIN_RELEASE := $(TOOLS_DIR)/tamarin-prover
 N_THREADS ?= 10
 PORT ?= 3001
+
+# Tamarin will look for maude and inherit it
+export PATH := $(PATH):$(TOOLS_DIR)
+
+# Linux setup (Tested on Ubuntu 24.04)
+.PHONY: setup
+setup:
+	mkdir -p tools
+	cd tools && \
+		curl -OL https://github.com/tamarin-prover/tamarin-prover/releases/download/1.10.0/tamarin-prover-1.10.0-linux64-ubuntu.tar.gz && \
+		tar -xvzf tamarin-prover-1.10.0-linux64-ubuntu.tar.gz && \
+		curl -OL https://github.com/maude-lang/Maude/releases/download/Maude3.5/Maude-3.5-linux-x86_64.zip && \
+		unzip -o Maude-3.5-linux-x86_64.zip
 
 .PHONY: well-formed
 well-formed:
