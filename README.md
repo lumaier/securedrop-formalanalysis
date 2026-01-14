@@ -10,7 +10,7 @@ Our proofs require optimizations to Tamarin that have not been integrated into a
 Thus, you must compile Tamarin from source to construct or verify proofs.
 To do so, follow the instructions here: https://tamarin-prover.com/install.html
 
-First, you must install Tamarin's dependencies, including [maude](https://maude.cs.illinois.edu/get-maude), and have it in PATH.
+First, you must install Tamarin's dependencies, including [maude](https://maude.cs.illinois.edu/get-maude), and have add it to your `PATH`.
 
 ```sh
 curl -OL https://github.com/maude-lang/Maude/releases/download/Maude3.5/Maude-3.5-linux-x86_64.zip
